@@ -3,23 +3,7 @@
 import { MapPin, Briefcase, Star, Phone, Mail } from 'lucide-react'
 import type { Lawyer } from './data'
 
-const PRIMARY = '#2563eb'
-const PRIMARY_TINT = '#eff6ff'
-
-interface LawyerCardProps {
-  lawyer: Lawyer
-}
-
-function StarRating({ rating }: { rating: number }) {
-  return (
-    <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
-      <Star size={13} style={{ color: '#f59e0b', fill: '#f59e0b' }} />
-      <span style={{ fontSize: '13px', fontWeight: 700, color: '#0f172a' }}>{rating.toFixed(1)}</span>
-    </span>
-  )
-}
-
-export function LawyerCard({ lawyer }: LawyerCardProps) {
+export function LawyerCard({ lawyer }: { lawyer: Lawyer }) {
   const initials = lawyer.name
     .replace('Adv. ', '')
     .split(' ')
@@ -28,77 +12,79 @@ export function LawyerCard({ lawyer }: LawyerCardProps) {
     .slice(0, 2)
 
   return (
-    <div style={{ background: '#fff', borderRadius: '16px', border: lawyer.featured ? `1.5px solid ${PRIMARY}` : '1px solid #e2e8f0', boxShadow: '0 2px 8px rgba(0,0,0,0.05)', overflow: 'hidden', display: 'flex', flexDirection: 'column', position: 'relative' }}>
-      {/* Featured badge */}
+    <div className={[
+      'bg-app-surface rounded-4xl flex flex-col relative overflow-hidden',
+      'transition-all duration-200 hover:-translate-y-0.5',
+      lawyer.featured
+        ? 'border-2 border-app-accent shadow-sm'
+        : 'border border-app-border hover:border-app-border-strong',
+    ].join(' ')}>
+
       {lawyer.featured && (
-        <div style={{ position: 'absolute', top: '14px', right: '14px', padding: '2px 9px', background: PRIMARY, borderRadius: '100px', fontSize: '10px', fontWeight: 700, color: '#fff', letterSpacing: '0.06em', textTransform: 'uppercase' as const }}>
+        <div className="absolute top-5 right-5 px-2.5 py-0.5 bg-app-accent rounded-full text-[9px] font-semibold uppercase tracking-widest text-[#EEE9DF]">
           Featured
         </div>
       )}
 
-      {/* Card body */}
-      <div style={{ padding: '22px 22px 18px' }}>
-        {/* Avatar + name row */}
-        <div style={{ display: 'flex', alignItems: 'flex-start', gap: '14px', marginBottom: '14px' }}>
-          <div style={{ width: '48px', height: '48px', borderRadius: '12px', background: PRIMARY_TINT, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, fontSize: '16px', fontWeight: 800, color: PRIMARY }}>
-            {initials}
+      <div className="p-6 flex-1">
+        {/* Avatar + name */}
+        <div className="flex items-start gap-3 mb-5">
+          <div className="w-12 h-12 rounded-2xl bg-app-accent flex items-center justify-center shrink-0">
+            <span className="text-[14px] font-bold font-mono text-[#EEE9DF]">{initials}</span>
           </div>
-          <div style={{ flex: 1, minWidth: 0 }}>
-            <div style={{ fontSize: '15px', fontWeight: 700, color: '#0f172a', marginBottom: '4px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{lawyer.name}</div>
-            <div style={{ display: 'inline-flex', alignItems: 'center', padding: '2px 9px', background: PRIMARY_TINT, borderRadius: '100px', fontSize: '11px', fontWeight: 600, color: PRIMARY }}>
-              {lawyer.specialization}
+          <div className="flex-1 min-w-0 pt-0.5">
+            <div className="text-[14px] font-semibold text-app-text truncate leading-snug mb-1.5">
+              {lawyer.name}
             </div>
+            <span className="inline-flex px-2.5 py-0.5 bg-app-accent-light text-app-accent rounded-full text-[10px] font-semibold">
+              {lawyer.specialization}
+            </span>
           </div>
         </div>
 
         {/* Meta row */}
-        <div style={{ display: 'flex', gap: '14px', flexWrap: 'wrap', marginBottom: '12px' }}>
-          <span style={{ display: 'flex', alignItems: 'center', gap: '5px', fontSize: '12px', color: '#64748b' }}>
-            <MapPin size={12} style={{ color: '#94a3b8' }} />
-            {lawyer.location}
+        <div className="flex items-center flex-wrap gap-x-3 gap-y-1 text-[11px] text-app-text-subtle mb-4">
+          <span className="flex items-center gap-1"><MapPin size={10} />{lawyer.location}</span>
+          <span className="flex items-center gap-1"><Briefcase size={10} />{lawyer.experience}</span>
+          <span className="flex items-center gap-1 text-app-text font-semibold">
+            <Star size={10} className="fill-amber-400 text-amber-400" />
+            {lawyer.rating.toFixed(1)}
           </span>
-          <span style={{ display: 'flex', alignItems: 'center', gap: '5px', fontSize: '12px', color: '#64748b' }}>
-            <Briefcase size={12} style={{ color: '#94a3b8' }} />
-            {lawyer.experience}
-          </span>
-          <StarRating rating={lawyer.rating} />
         </div>
 
         {/* Bio */}
-        <p style={{ fontSize: '13px', color: '#64748b', lineHeight: 1.6, marginBottom: '14px', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical' as const, overflow: 'hidden' }}>
+        <p className="text-[12px] text-app-text-muted leading-relaxed line-clamp-2 mb-5">
           {lawyer.bio}
         </p>
 
-        {/* Stats row */}
-        <div style={{ display: 'flex', gap: '12px', marginBottom: '16px' }}>
-          <div style={{ flex: 1, padding: '9px 12px', background: '#f8fafc', borderRadius: '9px', border: '1px solid #f1f5f9' }}>
-            <div style={{ fontSize: '11px', color: '#94a3b8', marginBottom: '2px' }}>Fee Range</div>
-            <div style={{ fontSize: '12px', fontWeight: 700, color: '#0f172a' }}>{lawyer.feeRange}</div>
-          </div>
-          <div style={{ flex: 1, padding: '9px 12px', background: '#f8fafc', borderRadius: '9px', border: '1px solid #f1f5f9' }}>
-            <div style={{ fontSize: '11px', color: '#94a3b8', marginBottom: '2px' }}>Cases</div>
-            <div style={{ fontSize: '12px', fontWeight: 700, color: '#0f172a' }}>{lawyer.casesHandled}+</div>
-          </div>
-          <div style={{ flex: 1, padding: '9px 12px', background: '#f8fafc', borderRadius: '9px', border: '1px solid #f1f5f9' }}>
-            <div style={{ fontSize: '11px', color: '#94a3b8', marginBottom: '2px' }}>Languages</div>
-            <div style={{ fontSize: '12px', fontWeight: 700, color: '#0f172a' }}>{lawyer.languages.length}</div>
-          </div>
+        {/* Stats tiles */}
+        <div className="grid grid-cols-3 gap-1.5">
+          {[
+            { label: 'Fee Range', value: lawyer.feeRange },
+            { label: 'Cases',     value: `${lawyer.casesHandled}+` },
+            { label: 'Languages', value: String(lawyer.languages.length) },
+          ].map(({ label, value }) => (
+            <div key={label} className="px-2 py-2.5 bg-app-bg rounded-2xl">
+              <div className="text-[9px] text-app-text-subtle mb-1 uppercase tracking-wide">{label}</div>
+              <div className="text-[11px] font-semibold text-app-text leading-tight">{value}</div>
+            </div>
+          ))}
         </div>
       </div>
 
       {/* Action buttons */}
-      <div style={{ padding: '0 22px 20px', marginTop: 'auto', display: 'flex', gap: '8px' }}>
+      <div className="p-6 pt-3 flex gap-2">
         <a
           href={`mailto:${lawyer.email}`}
-          style={{ flex: 1, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: '6px', padding: '10px', background: '#f8fafc', color: '#475569', textDecoration: 'none', borderRadius: '9px', fontSize: '13px', fontWeight: 600, border: '1px solid #e2e8f0' }}
+          className="flex-1 flex items-center justify-center gap-1.5 py-2.5 border border-app-border rounded-2xl text-[12px] font-medium text-app-text-muted no-underline hover:border-app-border-strong hover:text-app-text transition-all"
         >
-          <Mail size={13} /> Contact
+          <Mail size={12} /> Contact
         </a>
         <a
           href={`tel:${lawyer.phone}`}
-          style={{ flex: 1, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: '6px', padding: '10px', background: PRIMARY, color: '#fff', textDecoration: 'none', borderRadius: '9px', fontSize: '13px', fontWeight: 600 }}
+          className="flex-1 flex items-center justify-center gap-1.5 py-2.5 bg-app-accent text-[#EEE9DF] rounded-2xl text-[12px] font-medium no-underline hover:bg-app-accent-hover transition-colors"
         >
-          <Phone size={13} /> Call Now
+          <Phone size={12} /> Call Now
         </a>
       </div>
     </div>

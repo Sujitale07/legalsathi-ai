@@ -2,57 +2,69 @@
 
 import { useState, useMemo } from 'react'
 import Link from 'next/link'
-import { Search, SlidersHorizontal, Scale, Users, Award, BookOpen, MessageCircle, UserSearch, PhoneCall, ChevronDown, Database } from 'lucide-react'
+import {
+  Search, SlidersHorizontal, Scale, Users, Award, BookOpen,
+  MessageCircle, UserSearch, PhoneCall, ChevronDown, Database,
+} from 'lucide-react'
 import { LawyerCard } from './LawyerCard'
 import type { Lawyer } from './data'
 import { RATINGS } from './data'
 
-const PRIMARY = '#2563eb'
-const PRIMARY_TINT = '#eff6ff'
-const DARK = '#0a0f1e'
+// ── Filter selects ─────────────────────────────────────────────────────────────
 
-const selectStyle: React.CSSProperties = {
-  appearance: 'none', background: '#fff', border: '1px solid #e2e8f0',
-  borderRadius: '10px', padding: '10px 36px 10px 14px', fontSize: '14px',
-  color: '#0f172a', fontWeight: 500, cursor: 'pointer', outline: 'none', fontFamily: 'inherit',
-}
-
-function Select({ value, onChange, options }: { value: string; onChange: (v: string) => void; options: string[] }) {
+function Select({ value, onChange, options, label }: { value: string; onChange: (v: string) => void; options: string[]; label: string }) {
   return (
-    <div style={{ position: 'relative', display: 'inline-block' }}>
-      <select value={value} onChange={e => onChange(e.target.value)} style={selectStyle}>
+    <div className="relative">
+      <select
+        value={value}
+        onChange={e => onChange(e.target.value)}
+        title={label}
+        aria-label={label}
+        className="appearance-none bg-app-bg border border-app-border rounded-xl px-3.5 py-2 pr-8 text-[13px] text-app-text font-medium cursor-pointer outline-none focus:border-app-border-strong transition-colors"
+      >
         {options.map(o => <option key={o} value={o}>{o}</option>)}
       </select>
-      <ChevronDown size={14} style={{ position: 'absolute', right: '12px', top: '50%', transform: 'translateY(-50%)', color: '#94a3b8', pointerEvents: 'none' }} />
+      <ChevronDown size={12} className="absolute right-2.5 top-1/2 -translate-y-1/2 text-app-text-subtle pointer-events-none" />
     </div>
   )
 }
 
 function RatingSelect({ value, onChange }: { value: number; onChange: (v: number) => void }) {
   return (
-    <div style={{ position: 'relative', display: 'inline-block' }}>
-      <select value={value} onChange={e => onChange(Number(e.target.value))} style={selectStyle}>
+    <div className="relative">
+      <select
+        value={value}
+        onChange={e => onChange(Number(e.target.value))}
+        title="Filter by minimum rating"
+        aria-label="Filter by minimum rating"
+        className="appearance-none bg-app-bg border border-app-border rounded-xl px-3.5 py-2 pr-8 text-[13px] text-app-text font-medium cursor-pointer outline-none focus:border-app-border-strong transition-colors"
+      >
         {RATINGS.map(r => <option key={r.value} value={r.value}>{r.label}</option>)}
       </select>
-      <ChevronDown size={14} style={{ position: 'absolute', right: '12px', top: '50%', transform: 'translateY(-50%)', color: '#94a3b8', pointerEvents: 'none' }} />
+      <ChevronDown size={12} className="absolute right-2.5 top-1/2 -translate-y-1/2 text-app-text-subtle pointer-events-none" />
     </div>
   )
 }
 
-const howItWorks = [
-  { icon: UserSearch, step: '01', title: 'Search & Filter',  desc: 'Use the search bar and filters to find lawyers by specialization, location, or rating.' },
-  { icon: Scale,      step: '02', title: 'View Profile',     desc: 'Read lawyer bios, check experience, case count, and fee ranges before reaching out.' },
+// ── Static data ────────────────────────────────────────────────────────────────
+
+const HOW_IT_WORKS = [
+  { icon: UserSearch, step: '01', title: 'Search & Filter',  desc: 'Find lawyers by specialization, location, or rating using the search bar and filters.' },
+  { icon: Scale,      step: '02', title: 'View Profile',     desc: 'Read bios, check experience, case count, and fee ranges before reaching out.' },
   { icon: PhoneCall,  step: '03', title: 'Contact Directly', desc: 'Call or email the lawyer directly — no middlemen, no hidden fees.' },
 ]
 
+// ── Component ──────────────────────────────────────────────────────────────────
+
 interface Props {
   initialLawyers: Lawyer[]
+  dbError?: string | null
 }
 
-export function LawyerListing({ initialLawyers }: Props) {
-  const [query, setQuery]      = useState('')
-  const [spec, setSpec]        = useState('All')
-  const [loc, setLoc]          = useState('All')
+export function LawyerListing({ initialLawyers, dbError }: Props) {
+  const [query,    setQuery]  = useState('')
+  const [spec,     setSpec]   = useState('All')
+  const [loc,      setLoc]    = useState('All')
   const [minRating, setRating] = useState(0)
 
   const specializations = useMemo(
@@ -63,10 +75,9 @@ export function LawyerListing({ initialLawyers }: Props) {
     () => ['All', ...Array.from(new Set(initialLawyers.map(l => l.location))).sort()],
     [initialLawyers],
   )
-
   const stats = useMemo(() => [
     { icon: Users,    value: `${initialLawyers.length}+`,  label: 'Verified Lawyers' },
-    { icon: Award,    value: `${initialLawyers.filter(l => l.featured).length}`, label: 'Featured Profiles' },
+    { icon: Award,    value: `${initialLawyers.filter(l => l.featured).length}`, label: 'Featured' },
     { icon: BookOpen, value: `${specializations.length - 1}`, label: 'Specializations' },
     { icon: Scale,    value: `${initialLawyers.reduce((s, l) => s + l.casesHandled, 0).toLocaleString()}+`, label: 'Cases Handled' },
   ], [initialLawyers, specializations])
@@ -80,128 +91,161 @@ export function LawyerListing({ initialLawyers }: Props) {
     return matchQ && matchS && matchL && matchR
   }), [query, spec, loc, minRating, initialLawyers])
 
-  const hasActiveFilter = query || spec !== 'All' || loc !== 'All' || minRating > 0
-  const isEmpty = initialLawyers.length === 0
+  const hasFilter = query || spec !== 'All' || loc !== 'All' || minRating > 0
+  const isEmpty   = initialLawyers.length === 0
 
   return (
-    <div style={{ fontFamily: 'var(--font-geist-sans), ui-sans-serif, system-ui, sans-serif', color: '#0f172a', background: '#fafbff', minHeight: '100vh' }}>
+    <div className="min-h-screen bg-app-bg text-app-text font-sans">
 
-      {/* ── Navbar ── */}
-      <nav style={{ position: 'sticky', top: 0, zIndex: 50, background: 'rgba(255,255,255,0.92)', backdropFilter: 'blur(12px)', WebkitBackdropFilter: 'blur(12px)', borderBottom: '1px solid #e2e8f0' }}>
-        <div style={{ maxWidth: '1200px', margin: '0 auto', padding: '0 24px', height: '60px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-          <Link href="/" style={{ display: 'flex', alignItems: 'center', gap: '9px', textDecoration: 'none' }}>
-            <div style={{ width: '32px', height: '32px', borderRadius: '8px', background: PRIMARY, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-              <Scale size={15} color="#fff" strokeWidth={2.5} />
+      {/* ══ 1. NAVBAR — flat cream strip ══════════════════════════════════════════ */}
+      <nav className="sticky top-0 z-50 bg-app-bg/95 backdrop-blur-md border-b border-app-border">
+        <div className="max-w-6xl mx-auto px-6 h-14 flex items-center justify-between">
+          <Link href="/" className="flex items-center gap-2.5 no-underline">
+            <div className="w-8 h-8 rounded-lg bg-app-accent flex items-center justify-center">
+              <span className="text-[10px] font-bold font-mono text-[#EEE9DF]">LS</span>
             </div>
-            <span style={{ fontSize: '16px', fontWeight: 700, color: '#0f172a' }}>LegalSathi AI</span>
+            <span className="text-[15px] font-semibold tracking-tight text-app-text">LegalSathi AI</span>
           </Link>
-          <Link href="/chat" style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', padding: '8px 16px', background: PRIMARY, color: '#fff', textDecoration: 'none', borderRadius: '9px', fontSize: '13px', fontWeight: 600 }}>
-            <MessageCircle size={13} /> Ask AI
+          <Link
+            href="/chat"
+            className="flex items-center gap-1.5 px-4 py-1.5 bg-app-accent text-[#EEE9DF] rounded-lg text-[12px] font-medium no-underline hover:bg-app-accent-hover transition-colors"
+          >
+            <MessageCircle size={12} /> Ask AI
           </Link>
         </div>
       </nav>
 
-      {/* ── Hero / Search ── */}
-      <section style={{ padding: '72px 24px 56px', textAlign: 'center', background: '#fafbff' }}>
-        <div style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', padding: '4px 12px', borderRadius: '100px', border: '1px solid rgba(37,99,235,0.2)', background: 'rgba(37,99,235,0.05)', color: PRIMARY, fontSize: '11px', fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', marginBottom: '20px' }}>
-          <Scale size={11} /> Lawyer Directory
-        </div>
-        <h1 style={{ fontSize: 'clamp(2rem, 5vw, 3.5rem)', fontWeight: 800, color: DARK, letterSpacing: '-0.04em', lineHeight: 1.08, marginBottom: '14px' }}>
-          Find Trusted Lawyers<br />in Nepal
-        </h1>
-        <p style={{ fontSize: '17px', color: '#64748b', lineHeight: 1.7, marginBottom: '36px' }}>
-          Search by specialization, location, and expertise.
-        </p>
-        <div style={{ maxWidth: '560px', margin: '0 auto', position: 'relative' }}>
-          <Search size={17} style={{ position: 'absolute', left: '16px', top: '50%', transform: 'translateY(-50%)', color: '#94a3b8', pointerEvents: 'none' }} />
-          <input
-            type="text"
-            placeholder="Search by name, specialization, or keyword…"
-            value={query}
-            onChange={e => setQuery(e.target.value)}
-            disabled={isEmpty}
-            style={{ width: '100%', padding: '15px 16px 15px 46px', fontSize: '15px', border: '1.5px solid #e2e8f0', borderRadius: '12px', background: isEmpty ? '#f8fafc' : '#fff', color: '#0f172a', outline: 'none', boxSizing: 'border-box', boxShadow: '0 4px 16px rgba(0,0,0,0.06)', fontFamily: 'inherit', cursor: isEmpty ? 'not-allowed' : 'text' }}
-          />
+      {/* ══ 2. HERO — cream + hollow circle motifs (editorial) ════════════════════ */}
+      <section className="relative overflow-hidden bg-app-bg px-6 pt-20 pb-16 text-center">
+        {/* decorative rings */}
+        <div className="absolute -top-28 -right-28 w-96 h-96 rounded-full border border-app-border pointer-events-none" />
+        <div className="absolute top-12 -right-8 w-40 h-40 rounded-full border border-app-border opacity-50 pointer-events-none" />
+        <div className="absolute -bottom-20 -left-20 w-64 h-64 rounded-full border border-app-border opacity-40 pointer-events-none" />
+
+        <div className="relative max-w-2xl mx-auto">
+          <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full border border-app-border text-[10px] font-semibold uppercase tracking-widest text-app-text-subtle mb-8">
+            <Scale size={9} /> Lawyer Directory
+          </div>
+
+          <h1 className="font-display text-[clamp(2.25rem,6vw,4rem)] font-bold text-app-text leading-[1.06] tracking-tight mb-5">
+            Find Trusted Lawyers<br />in Nepal
+          </h1>
+
+          <p className="text-[15px] text-app-text-muted leading-relaxed mb-10 max-w-md mx-auto">
+            Search by specialization, location, and expertise. Connect directly — no middlemen.
+          </p>
+
+          <div className="relative max-w-lg mx-auto">
+            <Search size={15} className="absolute left-4 top-1/2 -translate-y-1/2 text-app-text-subtle pointer-events-none" />
+            <input
+              type="text"
+              placeholder="Search by name, specialization, or keyword…"
+              value={query}
+              onChange={e => setQuery(e.target.value)}
+              disabled={isEmpty && !dbError}
+              className="w-full pl-11 pr-5 py-4 text-[14px] bg-app-surface border border-app-border rounded-2xl outline-none focus:border-app-border-strong text-app-text placeholder:text-app-text-subtle shadow-sm transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            />
+          </div>
         </div>
       </section>
 
-      {/* ── DB Empty State ── */}
-      {isEmpty ? (
-        <section style={{ padding: '0 24px 80px' }}>
-          <div style={{ maxWidth: '560px', margin: '0 auto', textAlign: 'center', padding: '64px 32px', background: '#fff', borderRadius: '20px', border: '1px solid #e2e8f0', boxShadow: '0 2px 12px rgba(0,0,0,0.05)' }}>
-            <div style={{ width: '60px', height: '60px', borderRadius: '16px', background: PRIMARY_TINT, display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 20px' }}>
-              <Database size={26} style={{ color: PRIMARY }} />
+      {/* ══ DB Error / Empty State (full-page empty) ══════════════════════════════ */}
+      {(isEmpty || dbError) && (
+        <section className="px-6 pb-24">
+          <div className="max-w-md mx-auto bg-app-surface rounded-4xl border-2 border-dashed border-app-border p-12 text-center">
+            <div className={`w-14 h-14 rounded-3xl flex items-center justify-center mx-auto mb-5 ${dbError ? 'bg-rose-50' : 'bg-app-accent-light'}`}>
+              <Database size={24} className={dbError ? 'text-rose-500' : 'text-app-accent'} />
             </div>
-            <div style={{ fontSize: '20px', fontWeight: 800, color: DARK, marginBottom: '10px' }}>No lawyers in the database</div>
-            <p style={{ fontSize: '14px', color: '#64748b', lineHeight: 1.7, marginBottom: '24px' }}>
-              The lawyer directory is empty. Run the seed command to populate it with demo data, or add lawyers through the admin panel.
+            <h3 className="font-display text-[18px] font-bold text-app-text mb-3">
+              {dbError ? 'Database unavailable' : 'No lawyers yet'}
+            </h3>
+            <p className="text-[13px] text-app-text-muted leading-relaxed mb-6">
+              {dbError
+                ? 'Cannot connect to the database. Check that DATABASE_URL is set and the database is running.'
+                : 'The directory is empty. Seed it with demo data to get started.'}
             </p>
-            <code style={{ display: 'block', padding: '12px 16px', background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '10px', fontSize: '13px', color: '#475569', fontFamily: 'monospace', marginBottom: '20px', textAlign: 'left' }}>
-              pnpm prisma db push<br />pnpm prisma db seed
-            </code>
-            <Link href="/chat" style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', padding: '10px 20px', background: PRIMARY, color: '#fff', textDecoration: 'none', borderRadius: '10px', fontSize: '14px', fontWeight: 600 }}>
-              <MessageCircle size={14} /> Ask AI Instead
+            {dbError && (
+              <code className="block text-left text-[11px] text-rose-600 bg-rose-50 border border-rose-100 rounded-2xl px-4 py-3 mb-6 font-mono break-all">
+                {dbError}
+              </code>
+            )}
+            {!dbError && (
+              <code className="block text-left text-[12px] text-app-text-muted bg-app-bg border border-app-border rounded-2xl px-4 py-3 mb-6 font-mono leading-relaxed">
+                pnpm prisma db push<br />pnpm prisma db seed
+              </code>
+            )}
+            <Link
+              href="/chat"
+              className="inline-flex items-center gap-2 px-6 py-2.5 bg-app-accent text-[#EEE9DF] rounded-2xl text-[13px] font-medium no-underline hover:bg-app-accent-hover transition-colors"
+            >
+              <MessageCircle size={13} /> Ask AI Instead
             </Link>
           </div>
         </section>
-      ) : (
+      )}
+
+      {!isEmpty && !dbError && (
         <>
-          {/* ── Stats ── */}
-          <section style={{ padding: '0 24px 48px' }}>
-            <div style={{ maxWidth: '960px', margin: '0 auto', display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '14px' }}>
+          {/* ══ 3. STATS — full-bleed white strip, gap-px dividers ══════════════════ */}
+          <section className="bg-app-surface border-y border-app-border">
+            <div className="max-w-4xl mx-auto px-6 grid grid-cols-2 sm:grid-cols-4 gap-px bg-app-border">
               {stats.map(({ icon: Icon, value, label }, i) => (
-                <div key={i} style={{ padding: '18px 20px', background: '#fff', borderRadius: '14px', border: '1px solid #e2e8f0', display: 'flex', alignItems: 'center', gap: '14px', boxShadow: '0 1px 4px rgba(0,0,0,0.04)' }}>
-                  <div style={{ width: '40px', height: '40px', borderRadius: '10px', background: PRIMARY_TINT, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-                    <Icon size={18} style={{ color: PRIMARY }} />
+                <div key={i} className="bg-app-surface flex items-center gap-3 py-5 px-6">
+                  <div className="w-9 h-9 rounded-2xl bg-app-accent-light flex items-center justify-center shrink-0">
+                    <Icon size={15} className="text-app-accent" />
                   </div>
                   <div>
-                    <div style={{ fontSize: '20px', fontWeight: 800, color: DARK, lineHeight: 1 }}>{value}</div>
-                    <div style={{ fontSize: '12px', color: '#64748b', marginTop: '2px' }}>{label}</div>
+                    <div className="text-[18px] font-bold font-display text-app-text leading-tight">{value}</div>
+                    <div className="text-[10px] text-app-text-subtle mt-0.5">{label}</div>
                   </div>
                 </div>
               ))}
             </div>
           </section>
 
-          {/* ── Filters + Grid ── */}
-          <section style={{ padding: '0 24px 80px' }}>
-            <div style={{ maxWidth: '1200px', margin: '0 auto' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flexWrap: 'wrap', marginBottom: '28px', padding: '16px 20px', background: '#fff', borderRadius: '14px', border: '1px solid #e2e8f0', boxShadow: '0 1px 4px rgba(0,0,0,0.04)' }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '6px', color: '#64748b', fontSize: '13px', fontWeight: 600, marginRight: '4px' }}>
-                  <SlidersHorizontal size={14} /> Filters
+          {/* ══ 4. FILTER + GRID — cream bg, rounded-2xl bar, rounded-4xl cards ══════ */}
+          <section className="px-6 py-12">
+            <div className="max-w-6xl mx-auto">
+
+              {/* Filter bar */}
+              <div className="flex items-center gap-3 flex-wrap mb-8 px-5 py-3.5 bg-app-surface rounded-2xl border border-app-border">
+                <div className="flex items-center gap-2 text-[12px] font-semibold text-app-text-subtle mr-1">
+                  <SlidersHorizontal size={13} /> Filters
                 </div>
-                <Select value={spec}      onChange={setSpec}   options={specializations} />
-                <Select value={loc}       onChange={setLoc}    options={locations} />
+                <Select value={spec}      onChange={setSpec}   options={specializations} label="Filter by specialization" />
+                <Select value={loc}       onChange={setLoc}    options={locations}       label="Filter by location" />
                 <RatingSelect value={minRating} onChange={setRating} />
-                {hasActiveFilter && (
+                {hasFilter && (
                   <button
+                    type="button"
                     onClick={() => { setQuery(''); setSpec('All'); setLoc('All'); setRating(0) }}
-                    style={{ padding: '10px 14px', background: '#f1f5f9', color: '#64748b', border: 'none', borderRadius: '10px', fontSize: '13px', fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit' }}
+                    className="px-3 py-2 bg-app-bg border border-app-border rounded-xl text-[12px] font-medium text-app-text-subtle hover:text-app-text hover:border-app-border-strong transition-all cursor-pointer"
                   >
                     Clear
                   </button>
                 )}
-                <span style={{ marginLeft: 'auto', fontSize: '13px', color: '#94a3b8' }}>
-                  {filtered.length} lawyer{filtered.length !== 1 ? 's' : ''} found
+                <span className="ml-auto text-[12px] text-app-text-subtle">
+                  {filtered.length} lawyer{filtered.length !== 1 ? 's' : ''}
                 </span>
               </div>
 
+              {/* Cards grid */}
               {filtered.length > 0 ? (
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', gap: '20px' }}>
-                  {filtered.map(lawyer => (
-                    <LawyerCard key={lawyer.id} lawyer={lawyer} />
-                  ))}
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
+                  {filtered.map(lawyer => <LawyerCard key={lawyer.id} lawyer={lawyer} />)}
                 </div>
               ) : (
-                <div style={{ textAlign: 'center', padding: '64px 24px', background: '#fff', borderRadius: '16px', border: '1px solid #e2e8f0' }}>
-                  <div style={{ width: '52px', height: '52px', borderRadius: '14px', background: PRIMARY_TINT, display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 16px' }}>
-                    <Search size={22} style={{ color: PRIMARY }} />
+                /* Filter-level empty state */
+                <div className="py-24 bg-app-surface rounded-4xl border border-app-border text-center">
+                  <div className="w-12 h-12 rounded-3xl bg-app-accent-light flex items-center justify-center mx-auto mb-4">
+                    <Search size={20} className="text-app-accent" />
                   </div>
-                  <div style={{ fontSize: '17px', fontWeight: 700, color: DARK, marginBottom: '8px' }}>No lawyers found</div>
-                  <div style={{ fontSize: '14px', color: '#64748b', marginBottom: '16px' }}>Try adjusting your filters or search terms.</div>
+                  <div className="text-[16px] font-semibold font-display text-app-text mb-2">No lawyers found</div>
+                  <div className="text-[13px] text-app-text-muted mb-6">Try adjusting your search or filters.</div>
                   <button
+                    type="button"
                     onClick={() => { setQuery(''); setSpec('All'); setLoc('All'); setRating(0) }}
-                    style={{ padding: '9px 18px', background: PRIMARY_TINT, color: PRIMARY, border: 'none', borderRadius: '9px', fontSize: '13px', fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit' }}
+                    className="px-5 py-2 bg-app-accent-light text-app-accent rounded-xl text-[13px] font-medium border-none cursor-pointer hover:bg-app-accent hover:text-[#EEE9DF] transition-all"
                   >
                     Clear all filters
                   </button>
@@ -212,48 +256,62 @@ export function LawyerListing({ initialLawyers }: Props) {
         </>
       )}
 
-      {/* ── How It Works ── */}
-      <section style={{ padding: '72px 24px', background: DARK }}>
-        <div style={{ maxWidth: '960px', margin: '0 auto', textAlign: 'center' }}>
-          <p style={{ fontSize: '11px', fontWeight: 700, color: '#60a5fa', textTransform: 'uppercase', letterSpacing: '0.12em', marginBottom: '12px' }}>Simple Process</p>
-          <h2 style={{ fontSize: 'clamp(1.75rem, 4vw, 2.75rem)', fontWeight: 800, color: '#f1f5f9', letterSpacing: '-0.035em', lineHeight: 1.1, marginBottom: '48px' }}>How It Works</h2>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: '16px' }}>
-            {howItWorks.map(({ icon: Icon, step, title, desc }, i) => (
-              <div key={i} style={{ padding: '30px 24px', background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: '16px', textAlign: 'left' }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '16px' }}>
-                  <span style={{ fontSize: '12px', fontWeight: 800, color: '#60a5fa', letterSpacing: '0.08em' }}>{step}</span>
-                  <div style={{ width: '34px', height: '34px', borderRadius: '9px', background: 'rgba(37,99,235,0.2)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                    <Icon size={16} style={{ color: '#93c5fd' }} />
+      {/* ══ 5. HOW IT WORKS — navy full-bleed, ghost-border cards ════════════════ */}
+      <section className="bg-app-accent px-6 py-20">
+        <div className="max-w-4xl mx-auto">
+          <div className="text-center mb-12">
+            <p className="text-[10px] font-bold text-[#6B7D9A] uppercase tracking-widest mb-3">Simple Process</p>
+            <h2 className="font-display text-[clamp(1.75rem,4vw,2.75rem)] font-bold text-[#EEE9DF] tracking-tight leading-tight">
+              How It Works
+            </h2>
+          </div>
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+            {HOW_IT_WORKS.map(({ icon: Icon, step, title, desc }, i) => (
+              <div key={i} className="p-7 rounded-3xl border border-[#2D4070] bg-white/[0.04]">
+                <div className="flex items-center gap-3 mb-5">
+                  <span className="text-[11px] font-bold text-[#6B7D9A] tracking-widest font-mono">{step}</span>
+                  <div className="w-8 h-8 rounded-xl bg-[#2D4070] flex items-center justify-center">
+                    <Icon size={14} className="text-[#A8B4C8]" />
                   </div>
                 </div>
-                <div style={{ fontSize: '16px', fontWeight: 700, color: '#f1f5f9', marginBottom: '8px' }}>{title}</div>
-                <div style={{ fontSize: '13px', color: '#94a3b8', lineHeight: 1.65 }}>{desc}</div>
+                <div className="text-[15px] font-semibold text-[#EEE9DF] mb-2">{title}</div>
+                <div className="text-[12px] text-[#6B7D9A] leading-relaxed">{desc}</div>
               </div>
             ))}
           </div>
         </div>
       </section>
 
-      {/* ── CTA ── */}
-      <section style={{ padding: '72px 24px', background: PRIMARY, textAlign: 'center' }}>
-        <div style={{ maxWidth: '560px', margin: '0 auto' }}>
-          <h2 style={{ fontSize: 'clamp(1.5rem, 4vw, 2.25rem)', fontWeight: 800, color: '#fff', letterSpacing: '-0.03em', marginBottom: '12px' }}>
-            Not sure who to choose?
-          </h2>
-          <p style={{ fontSize: '16px', color: 'rgba(255,255,255,0.8)', lineHeight: 1.7, marginBottom: '28px' }}>
-            Ask LegalSathi AI for personalized guidance — describe your situation and get a recommended specialist instantly.
-          </p>
-          <Link href="/chat" style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', padding: '14px 32px', background: '#fff', color: '#1d4ed8', textDecoration: 'none', borderRadius: '12px', fontSize: '16px', fontWeight: 700, boxShadow: '0 8px 24px rgba(0,0,0,0.15)' }}>
-            <MessageCircle size={17} /> Ask AI Assistant
-          </Link>
+      {/* ══ 6. CTA — navy-bordered island box on cream ════════════════════════════ */}
+      <section className="bg-app-bg px-6 py-20">
+        <div className="max-w-lg mx-auto">
+          <div className="rounded-4xl border-2 border-app-accent bg-app-surface p-12 text-center">
+            <div className="w-12 h-12 rounded-2xl bg-app-accent flex items-center justify-center mx-auto mb-6">
+              <MessageCircle size={18} className="text-[#EEE9DF]" />
+            </div>
+            <h2 className="font-display text-[clamp(1.5rem,3vw,2.25rem)] font-bold text-app-text tracking-tight mb-3">
+              Not sure who to choose?
+            </h2>
+            <p className="text-[14px] text-app-text-muted leading-relaxed mb-8 max-w-sm mx-auto">
+              Describe your situation and LegalSathi AI will recommend the right specialist instantly.
+            </p>
+            <Link
+              href="/chat"
+              className="inline-flex items-center gap-2 px-7 py-3 bg-app-accent text-[#EEE9DF] rounded-2xl text-[14px] font-semibold no-underline hover:bg-app-accent-hover transition-colors"
+            >
+              <MessageCircle size={15} /> Ask AI Assistant
+            </Link>
+          </div>
         </div>
       </section>
 
-      {/* ── Footer ── */}
-      <footer style={{ padding: '28px 24px', background: DARK, textAlign: 'center', borderTop: '1px solid rgba(255,255,255,0.06)' }}>
-        <p style={{ fontSize: '13px', color: '#475569' }}>
+      {/* ══ 7. FOOTER — navy bg ═══════════════════════════════════════════════════ */}
+      <footer className="bg-app-accent border-t border-[#2D4070] px-6 py-7 text-center">
+        <p className="text-[12px] text-[#6B7D9A]">
           © 2026 LegalSathi AI · Team Symentix ·{' '}
-          <Link href="/" style={{ color: '#60a5fa', textDecoration: 'none' }}>Back to Home</Link>
+          <Link href="/" className="text-[#A8B4C8] no-underline hover:text-[#EEE9DF] transition-colors">
+            Back to Home
+          </Link>
         </p>
       </footer>
 

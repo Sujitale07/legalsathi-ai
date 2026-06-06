@@ -7,9 +7,17 @@ export const metadata = {
 }
 
 export default async function ListingPage() {
-  const lawyers = await prisma.lawyer.findMany({
-    orderBy: [{ featured: 'desc' }, { rating: 'desc' }],
-  })
+  let lawyers: Awaited<ReturnType<typeof prisma.lawyer.findMany>> = []
+  let dbError: string | null = null
 
-  return <LawyerListing initialLawyers={lawyers} />
+  try {
+    lawyers = await prisma.lawyer.findMany({
+      orderBy: [{ featured: 'desc' }, { rating: 'desc' }],
+    })
+  } catch (err) {
+    dbError = err instanceof Error ? err.message : 'Database unavailable'
+    console.error('[listing] DB error:', dbError)
+  }
+
+  return <LawyerListing initialLawyers={lawyers} dbError={dbError} />
 }
