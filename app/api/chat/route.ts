@@ -1,14 +1,33 @@
 import { NextRequest } from 'next/server'
-import Anthropic from '@anthropic-ai/sdk'
+import { GoogleGenAI } from '@google/genai'
 import { prisma } from '@/lib/prisma'
 import { retrieveRelevantChunks, buildSystemPrompt } from '@/lib/rag'
 
-const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
+const ai = new GoogleGenAI({
+  apiKey: (process.env.GEMINI_API_KEY ?? process.env.GOOGLE_API_KEY)!,
+})
+
+const CHAT_MODEL  = 'gemini-2.5-flash'
+const MAX_HISTORY = 10
+
+// Convert stored messages to Gemini's content format
+function toGeminiHistory(messages: { role: string; content: string }[]) {
+  return messages.map((m) => ({
+    role: m.role === 'assistant' ? 'model' : 'user',
+    parts: [{ text: m.content }],
+  }))
+}
 
 export async function POST(request: NextRequest) {
-  const { conversationId, message } = await request.json()
+  let body: { conversationId?: string; message?: string }
+  try {
+    body = await request.json()
+  } catch {
+    return Response.json({ error: 'Invalid JSON' }, { status: 400 })
+  }
 
-  if (!conversationId || !message) {
+  const { conversationId, message } = body
+  if (!conversationId || !message?.trim()) {
     return Response.json({ error: 'conversationId and message are required' }, { status: 400 })
   }
 
@@ -16,61 +35,91 @@ export async function POST(request: NextRequest) {
     where: { id: conversationId },
     include: { messages: { orderBy: { createdAt: 'asc' } } },
   })
-
   if (!conversation) {
     return Response.json({ error: 'Conversation not found' }, { status: 404 })
   }
 
+  // Persist user message
   await prisma.message.create({
     data: { role: 'user', content: message, conversationId },
   })
 
-  if (conversation.title === 'New Chat') {
-    const shortTitle = message.slice(0, 60).trim()
-    await prisma.conversation.update({
-      where: { id: conversationId },
-      data: { title: shortTitle },
-    })
+  // Auto-title on first message
+  if (conversation.title === 'New Chat' || conversation.title === 'New chat') {
+    generateTitle(conversationId, message).catch(() => {})
   }
 
+  // RAG retrieval
   const chunks = await retrieveRelevantChunks(message)
-  const systemPrompt = buildSystemPrompt(chunks)
+  const { system, sources } = buildSystemPrompt(chunks)
 
-  const history = conversation.messages.map((m) => ({
-    role: m.role as 'user' | 'assistant',
-    content: m.content,
-  }))
-
-  const stream = await anthropic.messages.stream({
-    model: 'claude-opus-4-8',
-    max_tokens: 2048,
-    system: systemPrompt,
-    messages: [...history, { role: 'user', content: message }],
-    thinking: { type: 'adaptive' },
-  })
+  // Trim history to last MAX_HISTORY messages
+  const history = toGeminiHistory(conversation.messages.slice(-MAX_HISTORY))
 
   const encoder = new TextEncoder()
   let fullResponse = ''
+  let streamError: string | null = null
 
   const readable = new ReadableStream({
     async start(controller) {
-      for await (const event of stream) {
-        if (
-          event.type === 'content_block_delta' &&
-          event.delta.type === 'text_delta'
-        ) {
-          const text = event.delta.text
-          fullResponse += text
-          controller.enqueue(encoder.encode(`data: ${JSON.stringify({ text })}\n\n`))
+      try {
+        const stream = await ai.models.generateContentStream({
+          model: CHAT_MODEL,
+          contents: [...history, { role: 'user', parts: [{ text: message }] }],
+          config: {
+            systemInstruction: system,
+            maxOutputTokens: 2048,
+          },
+        })
+
+        for await (const chunk of stream) {
+          const text = chunk.candidates?.[0]?.content?.parts?.[0]?.text ?? ''
+          if (text) {
+            fullResponse += text
+            controller.enqueue(encoder.encode(`data: ${JSON.stringify({ text })}\n\n`))
+          }
         }
+      } catch (err) {
+        streamError = err instanceof Error ? err.message : 'Stream error'
+        controller.enqueue(encoder.encode(`data: ${JSON.stringify({ error: streamError })}\n\n`))
+      } finally {
+        // Persist assistant turn
+        if (fullResponse) {
+          await prisma.message.create({
+            data: { role: 'assistant', content: fullResponse, conversationId },
+          })
+        }
+
+        // Send sources
+        controller.enqueue(encoder.encode(`data: ${JSON.stringify({ sources })}\n\n`))
+
+        // Generate follow-up suggestions
+        if (fullResponse && !streamError) {
+          try {
+            const suggRes = await ai.models.generateContent({
+              model: CHAT_MODEL,
+              contents: [{
+                role: 'user',
+                parts: [{ text: `Based on this legal Q&A, generate exactly 3 brief follow-up questions a Nepali user might ask next. Return ONLY a raw JSON array of 3 strings, max 9 words each. No markdown, no explanation.
+Q: ${message.slice(0, 300)}
+A: ${fullResponse.slice(0, 500)}` }],
+              }],
+              config: { maxOutputTokens: 150 },
+            })
+            const raw = suggRes.candidates?.[0]?.content?.parts?.[0]?.text?.trim() ?? ''
+            const match = raw.match(/\[[\s\S]*?\]/)
+            if (match) {
+              const suggestions: unknown = JSON.parse(match[0])
+              if (Array.isArray(suggestions) && suggestions.length > 0) {
+                controller.enqueue(encoder.encode(`data: ${JSON.stringify({ suggestions })}\n\n`))
+              }
+            }
+          } catch { /* skip suggestions on error */ }
+        }
+
+        controller.enqueue(encoder.encode('data: [DONE]\n\n'))
+        controller.close()
       }
-
-      await prisma.message.create({
-        data: { role: 'assistant', content: fullResponse, conversationId },
-      })
-
-      controller.enqueue(encoder.encode('data: [DONE]\n\n'))
-      controller.close()
     },
   })
 
@@ -81,4 +130,21 @@ export async function POST(request: NextRequest) {
       Connection: 'keep-alive',
     },
   })
+}
+
+async function generateTitle(conversationId: string, firstMessage: string) {
+  const res = await ai.models.generateContent({
+    model: CHAT_MODEL,
+    contents: [{
+      role: 'user',
+      parts: [{ text: `Write a 4-6 word title for a legal chat that starts with this question.
+Reply with ONLY the title, no quotes, no punctuation at the end.
+Question: ${firstMessage.slice(0, 200)}` }],
+    }],
+    config: { maxOutputTokens: 20 },
+  })
+  const title = (res.candidates?.[0]?.content?.parts?.[0]?.text ?? '').trim().slice(0, 80)
+  if (title) {
+    await prisma.conversation.update({ where: { id: conversationId }, data: { title } })
+  }
 }

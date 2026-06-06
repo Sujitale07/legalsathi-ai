@@ -1,93 +1,58 @@
 @import "tailwindcss";
 
-:root {
-  /* Sidebar — dark */
-  --sb-bg: #1e1e2e;
-  --sb-surface: #2a2a3d;
-  --sb-hover: #313147;
-  --sb-border: #2d2d3d;
-  --sb-text: #e2e8f0;
-  --sb-muted: #8892a4;
-  --sb-active-bg: #2d2b52;
-  --sb-active-border: #6366f1;
+@theme {
+  --font-sans: var(--font-inter);
+  --font-mono: var(--font-code);
+  --font-display: var(--font-playfair);
 
-  /* Main — light */
-  --bg: #ffffff;
-  --surface: #f8fafc;
-  --surface-hover: #f1f5f9;
-  --primary: #6366f1;
-  --primary-dark: #4f46e5;
-  --primary-tint: #eef2ff;
-  --text: #0f172a;
-  --text-muted: #64748b;
-  --text-subtle: #94a3b8;
-  --border: #e2e8f0;
-  --border-strong: #cbd5e1;
-  --error: #ef4444;
-  --success: #10b981;
+  /* ── Cream + Navy palette ── */
+  --color-app-bg:            #FAF8F4;
+  --color-app-surface:       #FFFFFF;
+  --color-app-surface-hover: #F3EFE8;
+  --color-app-border:        #E2D9CF;
+  --color-app-border-strong: #C8BEB4;
+
+  --color-app-text:          #1A1A2E;
+  --color-app-text-muted:    #5C5349;
+  --color-app-text-subtle:   #9A8E84;
+
+  --color-app-accent:        #1E2E4F;
+  --color-app-accent-hover:  #2E4270;
+  --color-app-accent-light:  #E8ECF4;
 }
 
-@theme inline {
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+@layer base {
+  *, ::before, ::after {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+  }
+
+  html, body {
+    height: 100%;
+    background-color: var(--color-app-bg);
+    color: var(--color-app-text);
+  }
+
+  body {
+    font-family: var(--font-sans), ui-sans-serif, system-ui, sans-serif;
+    font-size: 14px;
+    line-height: 1.6;
+    overflow: hidden;
+  }
 }
 
-*,
-*::before,
-*::after {
-  box-sizing: border-box;
-  margin: 0;
-  padding: 0;
-}
+/* Scrollbars */
+.scroll-area::-webkit-scrollbar { width: 4px; }
+.scroll-area::-webkit-scrollbar-track { background: transparent; }
+.scroll-area::-webkit-scrollbar-thumb { background: var(--color-app-border); border-radius: 2px; }
+.scroll-area::-webkit-scrollbar-thumb:hover { background: var(--color-app-border-strong); }
 
-html,
-body {
-  height: 100%;
-}
-
-body {
-  background: var(--bg);
-  color: var(--text);
-  font-family: var(--font-geist-sans), ui-sans-serif, system-ui, sans-serif;
-  font-size: 15px;
-  line-height: 1.7;
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
-}
-
-::selection {
-  background: var(--primary-tint);
-  color: var(--primary-dark);
-}
-
-/* Thin custom scrollbar — main area */
-.scroll-area::-webkit-scrollbar {
-  width: 5px;
-}
-.scroll-area::-webkit-scrollbar-track {
-  background: transparent;
-}
-.scroll-area::-webkit-scrollbar-thumb {
-  background: var(--border-strong);
-  border-radius: 3px;
-}
-.scroll-area::-webkit-scrollbar-thumb:hover {
-  background: var(--text-subtle);
-}
-
-/* Thin scrollbar — sidebar */
-.sb-scroll::-webkit-scrollbar {
-  width: 3px;
-}
-.sb-scroll::-webkit-scrollbar-track {
-  background: transparent;
-}
-.sb-scroll::-webkit-scrollbar-thumb {
-  background: var(--sb-surface);
-  border-radius: 2px;
-}
+.sb-scroll::-webkit-scrollbar { width: 3px; }
+.sb-scroll::-webkit-scrollbar-track { background: transparent; }
+.sb-scroll::-webkit-scrollbar-thumb { background: #2D4070; border-radius: 2px; }
 
 @keyframes dot-pulse {
-  0%, 100% { opacity: 0.25; transform: scale(0.75); }
-  50%       { opacity: 1;    transform: scale(1);    }
+  0%, 100% { opacity: 0.25; transform: scale(0.85); }
+  50%       { opacity: 1;    transform: scale(1); }
 }
