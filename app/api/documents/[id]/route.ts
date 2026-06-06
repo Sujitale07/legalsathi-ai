@@ -12,6 +12,7 @@ export async function GET(
       id: true,
       title: true,
       status: true,
+      domain: true,
       createdAt: true,
       _count: { select: { chunks: true } },
       chunks: {
@@ -26,8 +27,14 @@ export async function GET(
       },
     },
   })
+
+  // Count chunks with null embeddings
+  const nullEmbedCount = await prisma.$queryRaw<[{ count: bigint }]>`
+    SELECT COUNT(*)::int as count FROM "DocumentChunk"
+    WHERE "documentId" = ${id} AND embedding IS NULL
+  `
   if (!doc) return Response.json({ error: 'Not found' }, { status: 404 })
-  return Response.json(doc)
+  return Response.json({ ...doc, nullEmbedCount: Number(nullEmbedCount[0]?.count ?? 0) })
 }
 
 export async function DELETE(

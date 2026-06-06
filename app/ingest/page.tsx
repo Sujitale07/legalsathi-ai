@@ -24,6 +24,7 @@ type Chunk = {
 
 type DocumentDetail = Document & {
   chunks: Chunk[]
+  nullEmbedCount: number
 }
 
 type QueueItem = {
@@ -129,6 +130,7 @@ export default function IngestPage() {
   const [selectedDoc, setSelectedDoc] = useState<DocumentDetail | null>(null)
   const [loadingDetail, setLoadingDetail] = useState(false)
   const [isDrawerOpen, setIsDrawerOpen] = useState(false)
+  const [reEmbedding, setReEmbedding] = useState(false)
 
   // Polling ref for documents
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null)
@@ -241,6 +243,28 @@ export default function IngestPage() {
     setIsDrawerOpen(true)
   }
 
+  const handleReEmbed = async () => {
+    if (!selectedDocId) return
+    setReEmbedding(true)
+    try {
+      const res = await fetch(`/api/documents/${selectedDocId}/re-embed`, { method: 'POST' })
+      if (res.ok) {
+        const data = await res.json()
+        alert(data.message)
+        // Refresh detail so nullEmbedCount updates
+        fetchDetail(selectedDocId)
+        // Mark as processing in list
+        setDocuments(prev => prev.map(d => d.id === selectedDocId ? { ...d, status: 'processing' } : d))
+      } else {
+        alert('Re-embed request failed')
+      }
+    } catch (err) {
+      console.error('Re-embed error', err)
+    } finally {
+      setReEmbedding(false)
+    }
+  }
+
   const handleDeleteDoc = async (id: string, e?: React.MouseEvent) => {
     if (e) e.stopPropagation()
     const confirm = window.confirm('Are you sure you want to delete this document? This will purge all its vector chunks.')
@@ -305,21 +329,36 @@ export default function IngestPage() {
   }
 
   // File parsing & uploading logic
-  const parseFileContent = (file: File): Promise<string> => {
+  const parseFileContent = async (file: File): Promise<string> => {
+    if (file.name.toLowerCase().endsWith('.pdf')) {
+      const pdfjsLib = await import('pdfjs-dist')
+      pdfjsLib.GlobalWorkerOptions.workerSrc = new URL(
+        'pdfjs-dist/build/pdf.worker.mjs',
+        import.meta.url
+      ).toString()
+      const arrayBuffer = await file.arrayBuffer()
+      const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise
+      const pages: string[] = []
+      for (let i = 1; i <= pdf.numPages; i++) {
+        const page = await pdf.getPage(i)
+        const textContent = await page.getTextContent()
+        const pageText = textContent.items
+          .map((item) => ('str' in item ? item.str : ''))
+          .join(' ')
+        if (pageText.trim()) pages.push(`[PAGE ${i}]\n${pageText}`)
+      }
+      return pages.join('\n\n')
+    }
     return new Promise((resolve, reject) => {
       const reader = new FileReader()
-      reader.onload = (e) => {
-        resolve(e.target?.result as string)
-      }
-      reader.onerror = () => {
-        reject(new Error('FileReader failed'))
-      }
+      reader.onload = (e) => resolve(e.target?.result as string)
+      reader.onerror = () => reject(new Error('FileReader failed'))
       reader.readAsText(file)
     })
   }
 
   const processFiles = async (files: File[]) => {
-    const validExtensions = ['txt', 'md', 'json', 'csv']
+    const validExtensions = ['txt', 'md', 'json', 'csv', 'pdf']
 
     const newQueueItems: QueueItem[] = files.map(file => {
       const ext = file.name.split('.').pop()?.toLowerCase() || ''
@@ -590,7 +629,7 @@ export default function IngestPage() {
                     ref={fileInputRef}
                     onChange={handleFileInputChange}
                     multiple
-                    accept=".txt,.md,.json,.csv"
+                    accept=".txt,.md,.json,.csv,.pdf"
                     className="hidden"
                   />
                   <IconUpload />
@@ -598,7 +637,7 @@ export default function IngestPage() {
                     Drag and drop your files here, or <span className="text-app-accent hover:underline">browse files</span>
                   </p>
                   <p className="text-[10px] text-app-text-subtle">
-                    Supports .txt, .md, .json, and .csv files. Larger documents will be chunked automatically.
+                    Supports .pdf, .txt, .md, .json, and .csv files. Larger documents will be chunked automatically.
                   </p>
                 </div>
 
@@ -921,6 +960,9 @@ export default function IngestPage() {
                     <div className="bg-app-surface border border-app-border rounded-sm p-4 text-xs">
                       <p className="text-[9.5px] font-bold text-app-text-subtle uppercase tracking-wider mb-2">Vector Statistics</p>
                       <p className="font-semibold text-app-text">{selectedDoc.chunks?.length || 0} Total Chunks</p>
+                      {selectedDoc.nullEmbedCount > 0 && (
+                        <p className="text-[10px] text-amber-600 font-semibold mt-0.5">{selectedDoc.nullEmbedCount} missing embeddings</p>
+                      )}
                       <p className="text-[10px] text-app-text-subtle mt-0.5">Model: gemini-embedding-2 (768d)</p>
                     </div>
                     <div className="bg-app-surface border border-app-border rounded-sm p-4 text-xs col-span-2">
@@ -982,12 +1024,24 @@ export default function IngestPage() {
 
             {/* Drawer Footer */}
             <div className="h-16 px-6 border-t border-app-border flex items-center justify-between bg-[#F5F1EB] shrink-0">
-              <button
-                onClick={() => handleDeleteDoc(selectedDocId!)}
-                className="flex items-center gap-1.5 px-3.5 py-2 rounded-sm border border-red-300 hover:border-red-500 bg-transparent text-red-700 hover:bg-red-50 text-xs font-semibold transition-all cursor-pointer"
-              >
-                <IconTrash /> Delete Document
-              </button>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => handleDeleteDoc(selectedDocId!)}
+                  className="flex items-center gap-1.5 px-3.5 py-2 rounded-sm border border-red-300 hover:border-red-500 bg-transparent text-red-700 hover:bg-red-50 text-xs font-semibold transition-all cursor-pointer"
+                >
+                  <IconTrash /> Delete Document
+                </button>
+                {selectedDoc && selectedDoc.nullEmbedCount > 0 && (
+                  <button
+                    onClick={handleReEmbed}
+                    disabled={reEmbedding}
+                    className="flex items-center gap-1.5 px-3.5 py-2 rounded-sm border border-amber-400 hover:border-amber-600 bg-transparent text-amber-700 hover:bg-amber-50 text-xs font-semibold transition-all cursor-pointer disabled:opacity-50"
+                  >
+                    {reEmbedding ? <IconLoading /> : null}
+                    {reEmbedding ? 'Re-embedding…' : `Re-embed ${selectedDoc.nullEmbedCount} chunks`}
+                  </button>
+                )}
+              </div>
               <button
                 onClick={() => setIsDrawerOpen(false)}
                 className="px-4 py-2 bg-app-accent hover:bg-app-accent-hover text-[#EEE9DF] text-xs font-semibold rounded-sm transition-all cursor-pointer shadow-sm"

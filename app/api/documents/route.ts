@@ -2,6 +2,10 @@ import { NextRequest } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { chunkText, generateEmbeddingsBatch } from '@/lib/embeddings'
 
+// Allow large PDF text payloads
+export const maxDuration = 60
+export const dynamic = 'force-dynamic'
+
 export async function GET() {
   const documents = await prisma.document.findMany({
     orderBy: { createdAt: 'desc' },
@@ -10,6 +14,7 @@ export async function GET() {
       title: true,
       status: true,
       fileType: true,
+      domain: true,
       createdAt: true,
       _count: { select: { chunks: true } },
     },
@@ -24,7 +29,6 @@ export async function POST(request: NextRequest) {
     return Response.json({ error: 'title and content are required' }, { status: 400 })
   }
 
-  // Create document immediately so the UI can show it as "processing"
   const document = await prisma.document.create({
     data: {
       title: title.trim(),
@@ -46,6 +50,8 @@ export async function POST(request: NextRequest) {
   return Response.json({ id: document.id, title: document.title, status: 'processing' }, { status: 202 })
 }
 
+const DB_BATCH_SIZE = 50 // insert chunks in batches to avoid overwhelming the connection pool
+
 async function ingestDocument(documentId: string, content: string) {
   const chunks = chunkText(content)
 
@@ -57,37 +63,49 @@ async function ingestDocument(documentId: string, content: string) {
     return
   }
 
-  // Create all chunk rows first (no embedding yet)
-  const created = await Promise.all(
-    chunks.map((c) =>
-      prisma.documentChunk.create({
-        data: {
-          content: c.content,
-          chunkIndex: c.chunkIndex,
-          totalChunks: c.totalChunks,
-          documentId,
-        },
-      })
-    )
-  )
+  console.log(`[ingest] ${documentId} — ${chunks.length} chunks`)
 
-  // Generate all embeddings in batches
+  // Insert chunk rows in batches (sequential to avoid connection pool exhaustion)
+  const created: { id: string }[] = []
+  for (let i = 0; i < chunks.length; i += DB_BATCH_SIZE) {
+    const batch = chunks.slice(i, i + DB_BATCH_SIZE)
+    const rows = await Promise.all(
+      batch.map((c) =>
+        prisma.documentChunk.create({
+          data: {
+            content: c.content,
+            chunkIndex: c.chunkIndex,
+            totalChunks: c.totalChunks,
+            documentId,
+          },
+          select: { id: true },
+        })
+      )
+    )
+    created.push(...rows)
+  }
+
+  // Generate embeddings in batches (generateEmbeddingsBatch already batches at 50)
   const embeddings = await generateEmbeddingsBatch(chunks.map((c) => c.content))
 
-  // Write embeddings back with raw SQL (pgvector type)
-  await Promise.all(
-    created.map((chunk, i) => {
-      const vec = `[${embeddings[i].join(',')}]`
-      return prisma.$executeRaw`
-        UPDATE "DocumentChunk"
-        SET embedding = ${vec}::vector
-        WHERE id = ${chunk.id}
-      `
-    })
-  )
+  // Write embeddings back in batches
+  for (let i = 0; i < created.length; i += DB_BATCH_SIZE) {
+    await Promise.all(
+      created.slice(i, i + DB_BATCH_SIZE).map((chunk, j) => {
+        const vec = `[${embeddings[i + j].join(',')}]`
+        return prisma.$executeRaw`
+          UPDATE "DocumentChunk"
+          SET embedding = ${vec}::vector
+          WHERE id = ${chunk.id}
+        `
+      })
+    )
+  }
 
   await prisma.document.update({
     where: { id: documentId },
     data: { status: 'ready' },
   })
+
+  console.log(`[ingest] ${documentId} — done`)
 }

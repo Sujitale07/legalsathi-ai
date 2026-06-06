@@ -9,7 +9,7 @@ import { DOMAINS } from '@/lib/domains'
 type Message    = { id: string; role: string; content: string; createdAt: string }
 type Conversation = { id: string; title: string; domain: string; updatedAt: string }
 type Document   = { id: string; title: string; status: string; _count: { chunks: number } }
-type Source     = { documentId: string; documentTitle: string; chunkIndex: number; totalChunks: number }
+type Source     = { documentId: string; documentTitle: string; chunkIndex: number; totalChunks: number; pages?: number[] }
 
 // ─── Functional Icons ─────────────────────────────────────────────────────────
 
@@ -745,7 +745,17 @@ export default function ChatPage() {
                                 className="inline-flex items-center gap-1.5 px-3 py-1 text-[11px] font-medium rounded-full"
                                 style={{ backgroundColor: '#E8ECF4', color: '#1E2E4F', border: '1px solid #C8D4E8' }}
                               >
-                                <IconDoc />{s.documentTitle}
+                                <IconDoc />
+                                {s.documentTitle}
+                                {s.pages && s.pages.length > 0 && (
+                                  <span
+                                    className="ml-1 px-1.5 py-0.5 rounded text-[9.5px] font-bold"
+                                    style={{ backgroundColor: '#1E2E4F', color: '#EEE9DF' }}
+                                    title="PDF file page number (may differ from printed document page)"
+                                  >
+                                    PDF p.{s.pages.join(', ')}
+                                  </span>
+                                )}
                               </span>
                             ))}
                           </div>
@@ -867,7 +877,9 @@ export default function ChatPage() {
                         setSelectedDomain(domain.slug)
                         setTimeout(() => heroTextarea.current?.focus(), 60)
                       }}
-                      className="text-left px-5 py-4 border border-app-border bg-app-surface hover:border-[#1E2E4F] hover:bg-app-surface-hover rounded-sm transition-all cursor-pointer group"
+                      className={`text-left px-5 py-4 border border-app-border bg-app-surface hover:border-[#1E2E4F] hover:bg-app-surface-hover rounded-sm transition-all cursor-pointer group ${
+                        domain.slug === 'general' ? 'col-span-2 sm:col-span-3' : ''
+                      }`}
                     >
                       <div className="text-[22px] mb-2">{domain.icon}</div>
                       <div className="text-[13px] font-semibold text-app-text group-hover:text-[#1E2E4F] font-display mb-1">

@@ -117,10 +117,15 @@ export async function POST(request: NextRequest) {
                       litigation_lawyer: 'civil_lawyer',
                       general_lawyer:   'civil_lawyer',
                     }
+                    // For traffic domain, criminal_lawyer is never appropriate for routine fines
+                    const TRAFFIC_OVERRIDE: Record<string, string> = {
+                      criminal_lawyer: 'civil_lawyer',
+                    }
                     const types: string[] = scenario.required_lawyers
                       .map((l: { type?: string }) => {
                         const t = l.type?.toLowerCase().trim() ?? ''
-                        return TYPE_MAP[t] ?? t
+                        const mapped = TYPE_MAP[t] ?? t
+                        return domain === 'traffic' ? (TRAFFIC_OVERRIDE[mapped] ?? mapped) : mapped
                       })
                       .filter(Boolean)
                     if (types.length > 0) {
@@ -129,7 +134,10 @@ export async function POST(request: NextRequest) {
                         orderBy: { experience: 'desc' },
                         take: 4,
                       })
-                      if (matched.length > 0) scenario.matched_lawyers = matched
+                      if (matched.length > 0) {
+                        scenario.matched_lawyers = matched
+                        scenario.matched_lawyer_types = types
+                      }
                     }
                   } catch (e) {
                     console.error('Lawyer DB fetch failed:', e)
@@ -192,13 +200,22 @@ export async function POST(request: NextRequest) {
 }
 
 async function generateTitle(conversationId: string, firstMessage: string) {
-  const res = await ai.models.generateContent({
-    model: CHAT_MODEL,
-    contents: [{ role: 'user', parts: [{ text: `Write a 4-6 word title for a legal chat that starts with this question.\nReply with ONLY the title, no quotes, no punctuation at the end.\nQuestion: ${firstMessage.slice(0, 200)}` }] }],
-    config: { maxOutputTokens: 20 },
-  })
-  const title = (res.candidates?.[0]?.content?.parts?.[0]?.text ?? '').trim().slice(0, 80)
-  if (title) {
-    await prisma.conversation.update({ where: { id: conversationId }, data: { title } })
+  // Always save a fallback title first so "New Chat" is never shown after the first message
+  const fallback = firstMessage.length > 60 ? firstMessage.slice(0, 57).trimEnd() + '…' : firstMessage
+  await prisma.conversation.update({ where: { id: conversationId }, data: { title: fallback } })
+
+  // Try to upgrade to an AI-generated title (best-effort — quota failures are silently ignored)
+  try {
+    const res = await ai.models.generateContent({
+      model: CHAT_MODEL,
+      contents: [{ role: 'user', parts: [{ text: `Write a 4-6 word title for a legal chat that starts with this question.\nReply with ONLY the title, no quotes, no punctuation at the end.\nQuestion: ${firstMessage.slice(0, 200)}` }] }],
+      config: { maxOutputTokens: 20 },
+    })
+    const aiTitle = (res.candidates?.[0]?.content?.parts?.[0]?.text ?? '').trim().slice(0, 80)
+    if (aiTitle) {
+      await prisma.conversation.update({ where: { id: conversationId }, data: { title: aiTitle } })
+    }
+  } catch {
+    // Quota exceeded or model error — fallback title already saved above, nothing to do
   }
 }
