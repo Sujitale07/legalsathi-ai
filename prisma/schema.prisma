@@ -26,15 +26,19 @@ model Message {
 model Document {
   id        String          @id @default(cuid())
   title     String
+  fileType  String          @default("text")
+  status    String          @default("processing")
   createdAt DateTime        @default(now())
   chunks    DocumentChunk[]
 }
 
 model DocumentChunk {
-  id         String                      @id @default(cuid())
-  content    String
-  embedding  Unsupported("vector(1536)")?
-  documentId String
-  document   Document                    @relation(fields: [documentId], references: [id], onDelete: Cascade)
-  createdAt  DateTime                    @default(now())
+  id          String                      @id @default(cuid())
+  content     String
+  chunkIndex  Int
+  totalChunks Int
+  embedding   Unsupported("vector(768)")?
+  documentId  String
+  document    Document                    @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  createdAt   DateTime                    @default(now())
 }

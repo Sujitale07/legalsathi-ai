@@ -2,378 +2,98 @@
 
 import { useState, useEffect, useRef, useCallback } from 'react'
 
-type Message = { id: string; role: string; content: string; createdAt: string }
+type Message    = { id: string; role: string; content: string; createdAt: string }
 type Conversation = { id: string; title: string; updatedAt: string }
-type Document = { id: string; title: string; _count: { chunks: number } }
+type Document   = { id: string; title: string; status: string; _count: { chunks: number } }
+type Source     = { documentId: string; documentTitle: string; chunkIndex: number; totalChunks: number }
 
-const S = {
-  // Layout
-  shell: {
-    display: 'flex',
-    height: '100vh',
-    overflow: 'hidden',
-    background: 'var(--bg)',
-  } as React.CSSProperties,
+const SUGGESTIONS = [
+  'Tenant rights in Nepal',
+  'Employment contract clauses',
+  'Civil case filing steps',
+]
 
-  // Sidebar
-  sidebar: {
-    width: '248px',
-    flexShrink: 0,
-    display: 'flex',
-    flexDirection: 'column' as const,
-    background: 'var(--surface)',
-    borderRight: '1px solid var(--border)',
-    overflow: 'hidden',
-  },
-  sidebarHeader: {
-    height: '56px',
-    display: 'flex',
-    alignItems: 'center',
-    padding: '0 16px',
-    borderBottom: '1px solid var(--border)',
-    flexShrink: 0,
-    gap: '8px',
-  },
-  brandMark: {
-    width: '28px',
-    height: '28px',
-    borderRadius: '8px',
-    background: 'var(--primary)',
-    color: '#fff',
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-    fontSize: '11px',
-    fontWeight: 700,
-    flexShrink: 0,
-    letterSpacing: '-0.3px',
-  } as React.CSSProperties,
-  brandName: {
-    fontSize: '15px',
-    fontWeight: 700,
-    color: 'var(--text)',
-    letterSpacing: '-0.3px',
-  },
-  sidebarBody: {
-    flex: 1,
-    overflowY: 'auto' as const,
-    padding: '8px',
-  },
-  newChatBtn: {
-    width: '100%',
-    padding: '8px 12px',
-    marginBottom: '4px',
-    background: 'transparent',
-    border: '1px dashed var(--border)',
-    borderRadius: '8px',
-    fontSize: '13px',
-    fontWeight: 500,
-    color: 'var(--text-muted)',
-    cursor: 'pointer',
-    textAlign: 'left' as const,
-    transition: 'background 150ms ease, border-color 150ms ease, color 150ms ease',
-    display: 'flex',
-    alignItems: 'center',
-    gap: '6px',
-  },
-  sectionLabel: {
-    fontSize: '11px',
-    fontWeight: 600,
-    color: 'var(--text-subtle)',
-    textTransform: 'uppercase' as const,
-    letterSpacing: '0.06em',
-    padding: '12px 8px 4px',
-  },
-  convItem: (active: boolean): React.CSSProperties => ({
-    display: 'flex',
-    alignItems: 'center',
-    gap: '8px',
-    padding: '8px 10px 8px 12px',
-    borderRadius: '8px',
-    cursor: 'pointer',
-    marginBottom: '1px',
-    background: active ? 'var(--primary-tint)' : 'transparent',
-    borderLeft: active ? '3px solid var(--primary)' : '3px solid transparent',
-    transition: 'background 150ms ease, border-color 150ms ease',
-  }),
-  convTitle: (active: boolean): React.CSSProperties => ({
-    flex: 1,
-    fontSize: '13px',
-    color: active ? 'var(--text)' : 'var(--text-muted)',
-    fontWeight: active ? 500 : 400,
-    overflow: 'hidden',
-    textOverflow: 'ellipsis',
-    whiteSpace: 'nowrap',
-  }),
-  deleteBtn: {
-    background: 'none',
-    border: 'none',
-    cursor: 'pointer',
-    color: 'var(--text-subtle)',
-    fontSize: '13px',
-    padding: '2px',
-    borderRadius: '4px',
-    flexShrink: 0,
-    lineHeight: 1,
-    transition: 'color 150ms ease',
-  } as React.CSSProperties,
+// ─── Functional Icons ─────────────────────────────────────────────────────────
 
-  // Docs footer
-  docsFooter: {
-    borderTop: '1px solid var(--border)',
-    flexShrink: 0,
-  },
-  docsToggle: {
-    width: '100%',
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    background: 'none',
-    border: 'none',
-    cursor: 'pointer',
-    padding: '12px 16px',
-    fontSize: '13px',
-    fontWeight: 500,
-    color: 'var(--text-muted)',
-    transition: 'color 150ms ease',
-  } as React.CSSProperties,
-  docsPanel: {
-    padding: '0 12px 12px',
-    display: 'flex',
-    flexDirection: 'column' as const,
-    gap: '8px',
-  },
-  docRow: {
-    display: 'flex',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    padding: '6px 0',
-    borderBottom: '1px solid var(--border)',
-    fontSize: '13px',
-  } as React.CSSProperties,
-  inputBase: {
-    padding: '7px 10px',
-    fontSize: '13px',
-    border: '1px solid var(--border)',
-    borderRadius: '8px',
-    background: 'var(--bg)',
-    color: 'var(--text)',
-    outline: 'none',
-    fontFamily: 'inherit',
-    width: '100%',
-    transition: 'border-color 150ms ease, box-shadow 150ms ease',
-  } as React.CSSProperties,
-  uploadBtn: (disabled: boolean): React.CSSProperties => ({
-    padding: '8px 12px',
-    background: disabled ? 'var(--surface-hover)' : 'var(--primary)',
-    color: disabled ? 'var(--text-muted)' : '#fff',
-    border: 'none',
-    borderRadius: '8px',
-    fontSize: '13px',
-    fontWeight: 500,
-    cursor: disabled ? 'not-allowed' : 'pointer',
-    opacity: disabled ? 0.6 : 1,
-    transition: 'opacity 150ms ease, background 150ms ease',
-  }),
+const IconPlus = () => (
+  <svg width="14" height="14" viewBox="0 0 16 16" fill="none" className="shrink-0">
+    <path d="M8 3v10M3 8h10" stroke="currentColor" strokeWidth="1.5" />
+  </svg>
+)
 
-  // Main
-  main: {
-    flex: 1,
-    display: 'flex',
-    flexDirection: 'column' as const,
-    overflow: 'hidden',
-    background: 'var(--bg)',
-  },
-  topbar: {
-    height: '56px',
-    borderBottom: '1px solid var(--border)',
-    display: 'flex',
-    alignItems: 'center',
-    padding: '0 24px',
-    flexShrink: 0,
-    background: 'var(--bg)',
-  },
-  topbarTitle: {
-    fontSize: '15px',
-    fontWeight: 600,
-    color: 'var(--text)',
-  },
-  messageList: {
-    flex: 1,
-    overflowY: 'auto' as const,
-    padding: '32px 0',
-  },
-  messageInner: {
-    maxWidth: '720px',
-    margin: '0 auto',
-    padding: '0 24px',
-    display: 'flex',
-    flexDirection: 'column' as const,
-    gap: '24px',
-  },
-  // User bubble
-  userRow: {
-    display: 'flex',
-    justifyContent: 'flex-end',
-  },
-  userBubble: {
-    maxWidth: '70%',
-    background: 'var(--primary)',
-    color: '#fff',
-    borderRadius: '18px 18px 4px 18px',
-    padding: '12px 16px',
-    fontSize: '15px',
-    lineHeight: 1.65,
-    whiteSpace: 'pre-wrap',
-  } as React.CSSProperties,
-  // AI message — Perplexity style, no bubble
-  aiRow: {
-    display: 'flex',
-    gap: '12px',
-    alignItems: 'flex-start',
-  },
-  aiAvatar: {
-    width: '28px',
-    height: '28px',
-    borderRadius: '50%',
-    background: 'var(--primary)',
-    color: '#fff',
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-    fontSize: '10px',
-    fontWeight: 700,
-    flexShrink: 0,
-    marginTop: '2px',
-    letterSpacing: '-0.3px',
-  } as React.CSSProperties,
-  aiContent: {
-    flex: 1,
-    borderLeft: '3px solid var(--primary-tint)',
-    paddingLeft: '16px',
-  },
-  aiSender: {
-    fontSize: '12px',
-    fontWeight: 600,
-    color: 'var(--primary)',
-    marginBottom: '6px',
-  },
-  aiText: {
-    fontSize: '15px',
-    lineHeight: 1.65,
-    color: 'var(--text)',
-    whiteSpace: 'pre-wrap',
-  } as React.CSSProperties,
-  thinking: {
-    fontSize: '13px',
-    color: 'var(--text-subtle)',
-    display: 'flex',
-    alignItems: 'center',
-    gap: '6px',
-  },
+const IconChat = () => (
+  <svg width="14" height="14" viewBox="0 0 16 16" fill="none" className="shrink-0 opacity-60">
+    <path d="M2 2h12v9H8l-4 3v-3H2V2z" stroke="currentColor" strokeWidth="1.2" />
+  </svg>
+)
 
-  // Input bar
-  inputBar: {
-    borderTop: '1px solid var(--border)',
-    padding: '16px 24px',
-    flexShrink: 0,
-    background: 'var(--bg)',
-  },
-  inputWrap: {
-    maxWidth: '680px',
-    margin: '0 auto',
-    display: 'flex',
-    gap: '10px',
-    alignItems: 'flex-end',
-    background: 'var(--surface)',
-    border: '1px solid var(--border)',
-    borderRadius: '24px',
-    padding: '8px 8px 8px 20px',
-    transition: 'border-color 150ms ease, box-shadow 150ms ease',
-  } as React.CSSProperties,
-  chatTextarea: {
-    flex: 1,
-    border: 'none',
-    background: 'transparent',
-    resize: 'none' as const,
-    outline: 'none',
-    fontSize: '15px',
-    lineHeight: 1.5,
-    color: 'var(--text)',
-    fontFamily: 'inherit',
-    padding: '4px 0',
-    overflowY: 'auto' as const,
-  },
-  sendBtn: (disabled: boolean): React.CSSProperties => ({
-    width: '36px',
-    height: '36px',
-    borderRadius: '50%',
-    border: 'none',
-    background: disabled ? 'var(--border)' : 'var(--primary)',
-    color: disabled ? 'var(--text-subtle)' : '#fff',
-    cursor: disabled ? 'not-allowed' : 'pointer',
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-    flexShrink: 0,
-    transition: 'background 150ms ease, opacity 150ms ease',
-    opacity: disabled ? 0.5 : 1,
-  }),
+const IconDoc = () => (
+  <svg width="14" height="14" viewBox="0 0 16 16" fill="none" className="shrink-0 opacity-60">
+    <path d="M3 2h7l3 3v9H3V2z" stroke="currentColor" strokeWidth="1.2" />
+    <path d="M10 2v3h3" stroke="currentColor" strokeWidth="1.2" />
+  </svg>
+)
 
-  // Empty state
-  emptyState: {
-    flex: 1,
-    display: 'flex',
-    flexDirection: 'column' as const,
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: '16px',
-    padding: '48px 24px',
-    textAlign: 'center' as const,
-  },
-  emptyMark: {
-    width: '52px',
-    height: '52px',
-    borderRadius: '10px',
-    background: 'var(--primary)',
-    color: '#fff',
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-    fontSize: '18px',
-    fontWeight: 700,
-    letterSpacing: '-0.5px',
-  },
-  emptyHeading: {
-    fontSize: '22px',
-    fontWeight: 600,
-    color: 'var(--text)',
-    letterSpacing: '-0.3px',
-  },
-  emptyDesc: {
-    fontSize: '15px',
-    color: 'var(--text-muted)',
-    maxWidth: '340px',
-    lineHeight: 1.6,
-  },
-  startBtn: {
-    marginTop: '8px',
-    padding: '10px 24px',
-    background: 'var(--primary)',
-    color: '#fff',
-    border: 'none',
-    borderRadius: '8px',
-    fontSize: '14px',
-    fontWeight: 500,
-    cursor: 'pointer',
-    transition: 'opacity 150ms ease',
-  } as React.CSSProperties,
-} as const
+const IconSend = () => (
+  <svg width="14" height="14" viewBox="0 0 16 16" fill="none" className="shrink-0">
+    <path d="M14 8l-12-5 2 5-2 5 12-5z" fill="currentColor" />
+  </svg>
+)
+
+const IconX = () => (
+  <svg width="12" height="12" viewBox="0 0 16 16" fill="none" className="shrink-0">
+    <path d="M4 4l8 8M12 4l-8 8" stroke="currentColor" strokeWidth="1.5" />
+  </svg>
+)
+
+const IconCopy = () => (
+  <svg width="13" height="13" viewBox="0 0 16 16" fill="none" className="shrink-0">
+    <rect x="5" y="5" width="8" height="9" rx="1" stroke="currentColor" strokeWidth="1.3" />
+    <path d="M3 11V3h8" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" />
+  </svg>
+)
+
+const IconCheck = () => (
+  <svg width="13" height="13" viewBox="0 0 16 16" fill="none" className="shrink-0">
+    <path d="M3 8l4 4 6-7" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+  </svg>
+)
+
+const IconLightning = () => (
+  <svg width="11" height="11" viewBox="0 0 16 16" fill="none" className="shrink-0">
+    <path d="M9 2L3 9h5l-1 5 6-7H8l1-5z" fill="currentColor" />
+  </svg>
+)
+
+const IconChevronDown = () => (
+  <svg width="12" height="12" viewBox="0 0 16 16" fill="none" className="shrink-0">
+    <path d="M3 6l5 5 5-5" stroke="currentColor" strokeWidth="1.5" />
+  </svg>
+)
+
+const IconChevronUp = () => (
+  <svg width="12" height="12" viewBox="0 0 16 16" fill="none" className="shrink-0">
+    <path d="M3 10l5-5 5 5" stroke="currentColor" strokeWidth="1.5" />
+  </svg>
+)
+
+// ─── Thinking Indicator ───────────────────────────────────────────────────────
+
+const ThinkingIndicator = () => (
+  <div className="flex gap-1.5 py-1">
+    {[0, 1, 2].map((i) => (
+      <div key={i} className="w-1.5 h-1.5 rounded-full bg-app-text-subtle"
+        style={{ animation: `dot-pulse 1s ease-in-out ${i * 0.2}s infinite` }}
+      />
+    ))}
+  </div>
+)
+
+// ─── Component ────────────────────────────────────────────────────────────────
 
 export default function ChatPage() {
   const [conversations, setConversations] = useState<Conversation[]>([])
   const [activeId, setActiveId] = useState<string | null>(null)
-  const [activeTitle, setActiveTitle] = useState('')
   const [messages, setMessages] = useState<Message[]>([])
   const [input, setInput] = useState('')
   const [streaming, setStreaming] = useState(false)
@@ -383,8 +103,20 @@ export default function ChatPage() {
   const [uploading, setUploading] = useState(false)
   const [docsOpen, setDocsOpen] = useState(false)
   const [inputFocused, setInputFocused] = useState(false)
+  const [messageSources, setMessageSources] = useState<Record<string, Source[]>>({})
+  const [messageSuggestions, setMessageSuggestions] = useState<Record<string, string[]>>({})
+  const [copiedId, setCopiedId] = useState<string | null>(null)
+
   const bottomRef = useRef<HTMLDivElement>(null)
-  const textareaRef = useRef<HTMLTextAreaElement>(null)
+  const activeTextarea = useRef<HTMLTextAreaElement>(null)
+  const heroTextarea = useRef<HTMLTextAreaElement>(null)
+  const pollRef = useRef<ReturnType<typeof setInterval> | null>(null)
+  const documentsRef = useRef<Document[]>([])
+  useEffect(() => { documentsRef.current = documents })
+
+  const activeTitle = conversations.find(c => c.id === activeId)?.title ?? 'New Chat'
+
+  // ── Data ──────────────────────────────────────────────────────────────────
 
   const loadConversations = useCallback(async () => {
     const res = await fetch('/api/conversations')
@@ -397,66 +129,91 @@ export default function ChatPage() {
   }, [])
 
   useEffect(() => {
-    loadConversations()
-    loadDocuments()
+    const init = async () => {
+      await Promise.all([loadConversations(), loadDocuments()])
+    }
+    init()
   }, [loadConversations, loadDocuments])
+
+  // Poll processing documents every 3 s until they become ready or failed
+  useEffect(() => {
+    const processingIds = documents.filter(d => d.status === 'processing').map(d => d.id)
+    if (processingIds.length === 0) {
+      if (pollRef.current) { clearInterval(pollRef.current); pollRef.current = null }
+      return
+    }
+    if (pollRef.current) return
+    pollRef.current = setInterval(async () => {
+      const current = documentsRef.current.filter(d => d.status === 'processing')
+      if (!current.length) return
+      const updates = await Promise.all(
+        current.map(d => fetch(`/api/documents/${d.id}`).then(r => r.json()).catch(() => null))
+      )
+      setDocuments(prev => prev.map(d => {
+        const u = updates.find((u): u is Document => !!u && u.id === d.id)
+        return u ? { ...d, status: u.status } : d
+      }))
+    }, 3000)
+    return () => { if (pollRef.current) { clearInterval(pollRef.current); pollRef.current = null } }
+  }, [documents])
+
+  // ── Actions ───────────────────────────────────────────────────────────────
 
   const selectConversation = useCallback(async (conv: Conversation) => {
     setActiveId(conv.id)
-    setActiveTitle(conv.title)
+    setMessages([])
     const res = await fetch(`/api/conversations/${conv.id}`)
     const data = await res.json()
-    setMessages(data.messages)
+    setMessages(data.messages ?? [])
   }, [])
 
   const newConversation = useCallback(async () => {
     const res = await fetch('/api/conversations', { method: 'POST' })
     const conv = await res.json()
-    setConversations((prev) => [conv, ...prev])
+    setConversations((p) => [conv, ...p])
     setActiveId(conv.id)
-    setActiveTitle('New chat')
     setMessages([])
-    setTimeout(() => textareaRef.current?.focus(), 50)
+    setTimeout(() => activeTextarea.current?.focus(), 60)
   }, [])
 
-  const deleteConversation = useCallback(
-    async (id: string, e: React.MouseEvent) => {
-      e.stopPropagation()
-      await fetch(`/api/conversations/${id}`, { method: 'DELETE' })
-      setConversations((prev) => prev.filter((c) => c.id !== id))
-      if (activeId === id) {
-        setActiveId(null)
-        setActiveTitle('')
-        setMessages([])
-      }
-    },
-    [activeId]
-  )
+  const deleteConversation = useCallback(async (id: string, e: React.MouseEvent) => {
+    e.stopPropagation()
+    await fetch(`/api/conversations/${id}`, { method: 'DELETE' })
+    setConversations((p) => p.filter((c) => c.id !== id))
+    if (activeId === id) { setActiveId(null); setMessages([]) }
+  }, [activeId])
 
-  const sendMessage = useCallback(async () => {
-    if (!input.trim() || !activeId || streaming) return
+  const sendMessage = useCallback(async (override?: string) => {
+    const text = (override ?? input).trim()
+    if (!text || streaming) return
 
-    const userText = input.trim()
-    setInput('')
-    if (textareaRef.current) {
-      textareaRef.current.style.height = 'auto'
+    let convId = activeId
+    if (!convId) {
+      const res = await fetch('/api/conversations', { method: 'POST' })
+      const conv = await res.json()
+      setConversations((p) => [conv, ...p])
+      setActiveId(conv.id)
+      convId = conv.id
     }
 
-    const tempAiId = `tmp-${Date.now()}`
-    setMessages((prev) => [
-      ...prev,
-      { id: `u-${Date.now()}`, role: 'user', content: userText, createdAt: new Date().toISOString() },
-      { id: tempAiId, role: 'assistant', content: '', createdAt: new Date().toISOString() },
-    ])
+    setInput('')
+    if (activeTextarea.current) activeTextarea.current.style.height = 'auto'
+    if (heroTextarea.current) heroTextarea.current.style.height = 'auto'
 
+    const aiId = `ai-${Date.now()}`
+    setMessages((p) => [
+      ...p,
+      { id: `u-${Date.now()}`, role: 'user', content: text, createdAt: new Date().toISOString() },
+      { id: aiId, role: 'assistant', content: '', createdAt: new Date().toISOString() },
+    ])
     setStreaming(true)
+
     try {
       const res = await fetch('/api/chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ conversationId: activeId, message: userText }),
+        body: JSON.stringify({ conversationId: convId, message: text }),
       })
-
       const reader = res.body!.getReader()
       const decoder = new TextDecoder()
       let buf = ''
@@ -471,194 +228,194 @@ export default function ChatPage() {
           if (!line.startsWith('data: ')) continue
           const payload = line.slice(6)
           if (payload === '[DONE]') break
-          const { text } = JSON.parse(payload)
-          setMessages((prev) =>
-            prev.map((m) => (m.id === tempAiId ? { ...m, content: m.content + text } : m))
-          )
+          try {
+            const parsed = JSON.parse(payload)
+            if (parsed.text) {
+              setMessages(p => p.map(m => m.id === aiId ? { ...m, content: m.content + parsed.text } : m))
+            } else if (parsed.sources) {
+              setMessageSources(p => ({ ...p, [aiId]: parsed.sources }))
+            } else if (parsed.suggestions) {
+              setMessageSuggestions(p => ({ ...p, [aiId]: parsed.suggestions }))
+            }
+          } catch { /* skip malformed */ }
         }
       }
     } finally {
       setStreaming(false)
       loadConversations()
+      // Re-fetch after a short delay to capture auto-title (generated async on server)
+      setTimeout(() => loadConversations(), 3500)
     }
   }, [input, activeId, streaming, loadConversations])
 
-  useEffect(() => {
-    bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
-  }, [messages])
+  useEffect(() => { bottomRef.current?.scrollIntoView({ behavior: 'auto' }) }, [messages])
 
-  const handleKeyDown = useCallback(
-    (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
-      if (e.key === 'Enter' && !e.shiftKey) {
-        e.preventDefault()
-        sendMessage()
-      }
-    },
-    [sendMessage]
-  )
-
-  const handleInputChange = useCallback((e: React.ChangeEvent<HTMLTextAreaElement>) => {
-    setInput(e.target.value)
-    const el = e.target
+  const grow = useCallback((el: HTMLTextAreaElement) => {
     el.style.height = 'auto'
-    el.style.height = `${Math.min(el.scrollHeight, 160)}px`
+    el.style.height = `${Math.min(el.scrollHeight, 300)}px`
+  }, [])
+
+  const onKey = useCallback((e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMessage() }
+  }, [sendMessage])
+
+  const deleteDocument = useCallback(async (id: string) => {
+    await fetch(`/api/documents/${id}`, { method: 'DELETE' })
+    setDocuments(p => p.filter(d => d.id !== id))
   }, [])
 
   const uploadDocument = useCallback(async () => {
     if (!uploadTitle.trim() || !uploadContent.trim()) return
     setUploading(true)
     try {
-      await fetch('/api/documents', {
+      const res = await fetch('/api/documents', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ title: uploadTitle, content: uploadContent }),
       })
-      setUploadTitle('')
-      setUploadContent('')
-      await loadDocuments()
-    } finally {
-      setUploading(false)
-    }
-  }, [uploadTitle, uploadContent, loadDocuments])
+      const doc = await res.json()
+      setDocuments(p => [{ ...doc, status: 'processing', _count: { chunks: 0 } }, ...p])
+      setUploadTitle(''); setUploadContent('')
+    } finally { setUploading(false) }
+  }, [uploadTitle, uploadContent])
+
+  const copyMessage = useCallback((id: string, text: string) => {
+    navigator.clipboard.writeText(text).then(() => {
+      setCopiedId(id)
+      setTimeout(() => setCopiedId(null), 2000)
+    })
+  }, [])
+
+  // ── Render ────────────────────────────────────────────────────────────────
 
   return (
-    <div style={S.shell}>
+    <div className="flex h-screen bg-app-bg text-app-text font-sans">
 
-      {/* ─── Sidebar ─── */}
-      <aside style={S.sidebar}>
-        <div style={S.sidebarHeader}>
-          <div style={S.brandMark}>LS</div>
-          <span style={S.brandName}>LegalSathi</span>
+      {/* ════════════════════ SIDEBAR (Navy) */}
+      <aside className="w-64 shrink-0 flex flex-col" style={{ backgroundColor: '#1E2E4F' }}>
+
+        {/* Brand */}
+        <div className="h-14 px-5 flex items-center border-b" style={{ borderColor: '#2D4070' }}>
+          <div className="w-8 h-8 rounded-sm flex items-center justify-center mr-3 shrink-0" style={{ backgroundColor: '#FAF8F4' }}>
+            <span className="text-[11px] font-bold font-mono" style={{ color: '#1E2E4F' }}>LS</span>
+          </div>
+          <span className="text-[15px] font-semibold tracking-tight font-display" style={{ color: '#EEE9DF' }}>
+            LegalSathi
+          </span>
         </div>
 
-        <div style={S.sidebarBody}>
+        {/* New Chat */}
+        <div className="p-3">
           <button
             onClick={newConversation}
-            style={S.newChatBtn}
-            onMouseOver={(e) => {
-              e.currentTarget.style.background = 'var(--surface-hover)'
-              e.currentTarget.style.borderColor = 'var(--border-strong)'
-              e.currentTarget.style.color = 'var(--text)'
-            }}
-            onMouseOut={(e) => {
-              e.currentTarget.style.background = 'transparent'
-              e.currentTarget.style.borderColor = 'var(--border)'
-              e.currentTarget.style.color = 'var(--text-muted)'
-            }}
+            className="w-full flex items-center gap-2.5 px-3 py-2 rounded-sm text-[12px] font-medium transition-colors cursor-pointer"
+            style={{ color: '#A8B4C8' }}
+            onMouseEnter={e => { (e.currentTarget as HTMLButtonElement).style.color = '#EEE9DF'; (e.currentTarget as HTMLButtonElement).style.backgroundColor = '#2D4070' }}
+            onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.color = '#A8B4C8'; (e.currentTarget as HTMLButtonElement).style.backgroundColor = 'transparent' }}
           >
-            <svg width="13" height="13" viewBox="0 0 13 13" fill="none">
-              <path d="M6.5 1v11M1 6.5h11" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
-            </svg>
-            New chat
+            <IconPlus /> New Conversation
           </button>
+        </div>
 
+        {/* History */}
+        <div className="flex-1 overflow-y-auto sb-scroll px-3 space-y-0.5">
           {conversations.length > 0 && (
-            <div style={S.sectionLabel}>Recent</div>
+            <div className="px-3 py-2 text-[10px] font-semibold uppercase tracking-widest" style={{ color: '#6B7D9A' }}>
+              Recent
+            </div>
           )}
-
           {conversations.map((conv) => {
             const active = activeId === conv.id
             return (
               <div
                 key={conv.id}
                 onClick={() => selectConversation(conv)}
-                style={S.convItem(active)}
-                onMouseOver={(e) => {
-                  if (!active) e.currentTarget.style.background = 'var(--surface-hover)'
-                  const btn = e.currentTarget.querySelector<HTMLElement>('.del-btn')
-                  if (btn) btn.style.opacity = '1'
+                className="group flex items-center gap-2 px-3 py-2 cursor-pointer rounded-sm transition-all text-[12px]"
+                style={{
+                  backgroundColor: active ? '#2D4070' : 'transparent',
+                  color: active ? '#EEE9DF' : '#A8B4C8',
                 }}
-                onMouseOut={(e) => {
-                  if (!active) e.currentTarget.style.background = 'transparent'
-                  const btn = e.currentTarget.querySelector<HTMLElement>('.del-btn')
-                  if (btn) btn.style.opacity = '0'
-                }}
+                onMouseEnter={e => { if (!active) { (e.currentTarget as HTMLDivElement).style.backgroundColor = '#243564'; (e.currentTarget as HTMLDivElement).style.color = '#EEE9DF' } }}
+                onMouseLeave={e => { if (!active) { (e.currentTarget as HTMLDivElement).style.backgroundColor = 'transparent'; (e.currentTarget as HTMLDivElement).style.color = '#A8B4C8' } }}
               >
-                <svg width="13" height="13" viewBox="0 0 13 13" fill="none" style={{ flexShrink: 0, color: active ? 'var(--primary)' : 'var(--text-subtle)' }}>
-                  <path d="M2 2h9v7H2zM4 9v2M9 9v2" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round"/>
-                </svg>
-                <span style={S.convTitle(active)}>{conv.title}</span>
+                <IconChat />
+                <span className="flex-1 truncate">{conv.title}</span>
                 <button
-                  className="del-btn"
                   onClick={(e) => deleteConversation(conv.id, e)}
-                  style={{ ...S.deleteBtn, opacity: 0 }}
-                  onMouseOver={(e) => (e.currentTarget.style.color = 'var(--error)')}
-                  onMouseOut={(e) => (e.currentTarget.style.color = 'var(--text-subtle)')}
+                  className="opacity-0 group-hover:opacity-100 transition-opacity"
+                  style={{ color: '#6B7D9A' }}
                 >
-                  ✕
+                  <IconX />
                 </button>
               </div>
             )
           })}
         </div>
 
-        {/* Documents */}
-        <div style={S.docsFooter}>
+        {/* Knowledge Base */}
+        <div className="border-t" style={{ borderColor: '#2D4070' }}>
           <button
-            style={S.docsToggle}
-            onClick={() => setDocsOpen((v) => !v)}
-            onMouseOver={(e) => (e.currentTarget.style.color = 'var(--text)')}
-            onMouseOut={(e) => (e.currentTarget.style.color = 'var(--text-muted)')}
+            onClick={() => setDocsOpen(!docsOpen)}
+            className="w-full px-5 py-3 flex items-center justify-between text-[11px] font-semibold uppercase tracking-wider transition-colors"
+            style={{ color: '#A8B4C8' }}
           >
-            <span style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-              <svg width="13" height="13" viewBox="0 0 13 13" fill="none">
-                <path d="M3 1h5l3 3v8H3V1z" stroke="currentColor" strokeWidth="1.2" strokeLinejoin="round"/>
-                <path d="M8 1v3h3" stroke="currentColor" strokeWidth="1.2" strokeLinejoin="round"/>
-              </svg>
-              Documents
-            </span>
-            <span style={{ fontSize: '12px', color: 'var(--text-subtle)' }}>
-              {documents.length} {docsOpen ? '▲' : '▼'}
-            </span>
+            <span className="flex items-center gap-2"><IconDoc /> Knowledge Base</span>
+            <div className="flex items-center gap-2">
+              <span className="text-[10px]">{documents.length}</span>
+              {docsOpen ? <IconChevronUp /> : <IconChevronDown />}
+            </div>
           </button>
 
           {docsOpen && (
-            <div style={S.docsPanel}>
-              {documents.map((doc) => (
-                <div key={doc.id} style={S.docRow}>
-                  <span style={{ color: 'var(--text)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: 1 }}>{doc.title}</span>
-                  <span style={{ color: 'var(--text-subtle)', fontSize: '12px', marginLeft: '8px', flexShrink: 0 }}>{doc._count.chunks} chunks</span>
-                </div>
-              ))}
-
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', paddingTop: documents.length ? '8px' : 0 }}>
+            <div className="px-3 pb-4 space-y-2">
+              <div className="max-h-32 overflow-y-auto space-y-1 sb-scroll">
+                {documents.map((doc) => (
+                  <div key={doc.id} className="flex justify-between items-center px-2.5 py-1.5 rounded-sm text-[11px] group" style={{ backgroundColor: '#243564' }}>
+                    <span className="truncate pr-2" style={{ color: '#A8B4C8' }}>{doc.title}</span>
+                    <div className="flex items-center gap-1.5 shrink-0">
+                      {doc.status === 'processing' && (
+                        <span className="text-[9px] font-medium text-yellow-400">Indexing…</span>
+                      )}
+                      {doc.status === 'failed' && (
+                        <span className="text-[9px] text-red-400">Failed</span>
+                      )}
+                      {doc.status === 'ready' && (
+                        <span className="text-[9px]" style={{ color: '#6B7D9A' }}>{doc._count.chunks}c</span>
+                      )}
+                      <button
+                        onClick={() => deleteDocument(doc.id)}
+                        className="opacity-0 group-hover:opacity-100 transition-opacity"
+                        style={{ color: '#6B7D9A' }}
+                      >
+                        <IconX />
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+              <div className="space-y-1.5 pt-1">
                 <input
                   value={uploadTitle}
                   onChange={(e) => setUploadTitle(e.target.value)}
                   placeholder="Document title"
-                  style={S.inputBase}
-                  onFocus={(e) => {
-                    e.currentTarget.style.borderColor = 'var(--primary)'
-                    e.currentTarget.style.boxShadow = '0 0 0 3px rgba(99,102,241,0.15)'
-                  }}
-                  onBlur={(e) => {
-                    e.currentTarget.style.borderColor = 'var(--border)'
-                    e.currentTarget.style.boxShadow = 'none'
-                  }}
+                  className="w-full px-3 py-2 rounded-sm text-[11px] outline-none"
+                  style={{ backgroundColor: '#243564', border: '1px solid #2D4070', color: '#EEE9DF' }}
                 />
                 <textarea
                   value={uploadContent}
                   onChange={(e) => setUploadContent(e.target.value)}
-                  placeholder="Paste document text…"
-                  rows={3}
-                  style={{ ...S.inputBase, resize: 'none' }}
-                  onFocus={(e) => {
-                    e.currentTarget.style.borderColor = 'var(--primary)'
-                    e.currentTarget.style.boxShadow = '0 0 0 3px rgba(99,102,241,0.15)'
-                  }}
-                  onBlur={(e) => {
-                    e.currentTarget.style.borderColor = 'var(--border)'
-                    e.currentTarget.style.boxShadow = 'none'
-                  }}
+                  placeholder="Paste document content…"
+                  rows={2}
+                  className="w-full px-3 py-2 rounded-sm text-[11px] outline-none resize-none"
+                  style={{ backgroundColor: '#243564', border: '1px solid #2D4070', color: '#EEE9DF' }}
                 />
                 <button
                   onClick={uploadDocument}
-                  disabled={uploading || !uploadTitle.trim() || !uploadContent.trim()}
-                  style={S.uploadBtn(uploading || !uploadTitle.trim() || !uploadContent.trim())}
-                  onMouseOver={(e) => { if (!uploading) e.currentTarget.style.opacity = '0.88' }}
-                  onMouseOut={(e) => { if (!uploading) e.currentTarget.style.opacity = '1' }}
+                  disabled={uploading || !uploadTitle.trim()}
+                  className="w-full py-2 rounded-sm text-[11px] font-semibold transition-colors cursor-pointer disabled:opacity-30"
+                  style={{ backgroundColor: '#EEE9DF', color: '#1E2E4F' }}
                 >
-                  {uploading ? 'Uploading…' : 'Upload document'}
+                  {uploading ? 'Indexing…' : 'Add to Knowledge Base'}
                 </button>
               </div>
             </div>
@@ -666,122 +423,253 @@ export default function ChatPage() {
         </div>
       </aside>
 
-      {/* ─── Main ─── */}
-      <main style={S.main}>
+      {/* ════════════════════ MAIN */}
+      <main className="flex-1 flex flex-col min-w-0 bg-app-bg">
+
         {activeId ? (
           <>
-            {/* Topbar */}
-            <div style={S.topbar}>
-              <span style={S.topbarTitle}>{activeTitle}</span>
-            </div>
+            {/* Header */}
+            <header className="h-14 shrink-0 flex items-center justify-between px-8 border-b border-app-border bg-app-surface">
+              <h2 className="text-[17px] font-semibold text-app-text truncate max-w-md font-display">
+                {activeTitle}
+              </h2>
+              <div className="flex items-center gap-2 text-[11px] text-app-text-subtle">
+                <div className={`w-1.5 h-1.5 rounded-full ${streaming ? 'bg-amber-400' : 'bg-emerald-500'}`} />
+                <span>{streaming ? 'Responding…' : 'Ready'}</span>
+              </div>
+            </header>
 
             {/* Messages */}
-            <div style={S.messageList}>
-              <div style={S.messageInner}>
-                {messages.map((msg) =>
-                  msg.role === 'user' ? (
-                    <div key={msg.id} style={S.userRow}>
-                      <div style={S.userBubble}>{msg.content}</div>
+            <div className="flex-1 overflow-y-auto scroll-area py-10" style={{ backgroundColor: '#FAF8F4' }}>
+              <div className="max-w-[740px] mx-auto px-8 space-y-10">
+
+                {/* Empty state */}
+                {messages.length === 0 && (
+                  <div className="flex flex-col items-center justify-center py-24 text-center">
+                    <div className="w-12 h-12 rounded-xl flex items-center justify-center mb-5 shadow-sm" style={{ backgroundColor: '#1E2E4F' }}>
+                      <span className="text-[12px] font-bold font-mono" style={{ color: '#EEE9DF' }}>LS</span>
                     </div>
-                  ) : (
-                    <div key={msg.id} style={S.aiRow}>
-                      <div style={S.aiAvatar}>LS</div>
-                      <div style={S.aiContent}>
-                        <div style={S.aiSender}>LegalSathi</div>
-                        {msg.content ? (
-                          <div style={S.aiText}>{msg.content}</div>
-                        ) : streaming ? (
-                          <div style={S.thinking}>
-                            <span style={{ display: 'inline-flex', gap: '3px' }}>
-                              {[0, 1, 2].map((i) => (
-                                <span
-                                  key={i}
-                                  style={{
-                                    width: '5px',
-                                    height: '5px',
-                                    borderRadius: '50%',
-                                    background: 'var(--primary)',
-                                    animation: `pulse 1.2s ease-in-out ${i * 0.2}s infinite`,
-                                    display: 'inline-block',
-                                  }}
-                                />
-                              ))}
-                            </span>
-                          </div>
-                        ) : null}
-                      </div>
-                    </div>
-                  )
+                    <p className="text-[17px] font-semibold text-app-text font-display mb-2">How can I help you?</p>
+                    <p className="text-[13px] text-app-text-muted max-w-[280px] leading-relaxed">
+                      Ask any legal question. I'll reference your uploaded documents for grounded answers.
+                    </p>
+                  </div>
                 )}
+
+                {messages.map((msg) => msg.role === 'user' ? (
+
+                  /* ── User bubble ── */
+                  <div key={msg.id} className="flex justify-end">
+                    <div
+                      className="max-w-[68%] px-5 py-3.5 text-[13.5px] leading-[1.7] shadow-sm"
+                      style={{
+                        backgroundColor: '#1E2E4F',
+                        color: '#EEE9DF',
+                        borderRadius: '18px 18px 4px 18px',
+                      }}
+                    >
+                      {msg.content}
+                    </div>
+                  </div>
+
+                ) : (
+
+                  /* ── AI response (flat prose, no card) ── */
+                  <div key={msg.id} className="group flex gap-4 items-start">
+                    {/* Avatar */}
+                    <div
+                      className="w-7 h-7 shrink-0 rounded-lg flex items-center justify-center mt-0.5"
+                      style={{ backgroundColor: '#1E2E4F' }}
+                    >
+                      <span className="text-[9px] font-bold font-mono" style={{ color: '#EEE9DF' }}>LS</span>
+                    </div>
+
+                    {/* Content */}
+                    <div className="flex-1 min-w-0 space-y-3 pt-0.5">
+
+                      {/* Sender label + copy */}
+                      <div className="flex items-center justify-between">
+                        <span className="text-[11px] font-semibold font-display" style={{ color: '#1E2E4F' }}>LegalSathi</span>
+                        <button
+                          onClick={() => copyMessage(msg.id, msg.content)}
+                          className="flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-medium opacity-0 group-hover:opacity-100 transition-opacity"
+                          style={{ color: copiedId === msg.id ? '#16a34a' : '#9A8E84' }}
+                        >
+                          {copiedId === msg.id ? <><IconCheck /> Copied</> : <><IconCopy /> Copy</>}
+                        </button>
+                      </div>
+
+                      {/* Response text */}
+                      <div className="text-[14px] leading-[1.9] whitespace-pre-wrap break-words" style={{ color: '#1A1A2E' }}>
+                        {msg.content ? msg.content : <ThinkingIndicator />}
+                      </div>
+
+                      {/* Source chips */}
+                      {(messageSources[msg.id]?.length ?? 0) > 0 && (
+                        <div className="flex flex-wrap items-center gap-2 pt-1">
+                          <span className="text-[10px] font-medium" style={{ color: '#9A8E84' }}>Referenced:</span>
+                          {[...new Map(messageSources[msg.id].map(s => [s.documentId, s])).values()].map(s => (
+                            <span
+                              key={s.documentId}
+                              className="inline-flex items-center gap-1.5 px-3 py-1 text-[11px] font-medium rounded-full"
+                              style={{ backgroundColor: '#E8ECF4', color: '#1E2E4F', border: '1px solid #C8D4E8' }}
+                            >
+                              <IconDoc />{s.documentTitle}
+                            </span>
+                          ))}
+                        </div>
+                      )}
+
+                      {/* Follow-up suggestions */}
+                      {(messageSuggestions[msg.id]?.length ?? 0) > 0 && (
+                        <div className="space-y-2 pt-1">
+                          <div className="flex items-center gap-1.5 text-[10px] font-semibold tracking-wide" style={{ color: '#9A8E84' }}>
+                            <IconLightning />
+                            <span>FOLLOW-UP</span>
+                          </div>
+                          <div className="flex flex-wrap gap-2">
+                            {messageSuggestions[msg.id].map((q, i) => (
+                              <button
+                                key={i}
+                                onClick={() => sendMessage(q)}
+                                className="text-[12px] px-3.5 py-1.5 rounded-full border transition-all cursor-pointer"
+                                style={{ borderColor: '#C8BEB4', color: '#5C5349', backgroundColor: 'transparent' }}
+                                onMouseEnter={e => {
+                                  const el = e.currentTarget as HTMLButtonElement
+                                  el.style.backgroundColor = '#1E2E4F'
+                                  el.style.color = '#EEE9DF'
+                                  el.style.borderColor = '#1E2E4F'
+                                }}
+                                onMouseLeave={e => {
+                                  const el = e.currentTarget as HTMLButtonElement
+                                  el.style.backgroundColor = 'transparent'
+                                  el.style.color = '#5C5349'
+                                  el.style.borderColor = '#C8BEB4'
+                                }}
+                              >
+                                {q}
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+
+                ))}
                 <div ref={bottomRef} />
               </div>
             </div>
 
-            {/* Input bar */}
-            <div style={S.inputBar}>
-              <div
-                style={{
-                  ...S.inputWrap,
-                  borderColor: inputFocused ? 'var(--primary)' : 'var(--border)',
-                  boxShadow: inputFocused ? '0 0 0 3px rgba(99,102,241,0.12)' : 'none',
-                }}
-              >
-                <textarea
-                  ref={textareaRef}
-                  value={input}
-                  onChange={handleInputChange}
-                  onKeyDown={handleKeyDown}
-                  onFocus={() => setInputFocused(true)}
-                  onBlur={() => setInputFocused(false)}
-                  placeholder="Ask a legal question…"
-                  rows={1}
-                  style={S.chatTextarea}
-                />
-                <button
-                  onClick={sendMessage}
-                  disabled={streaming || !input.trim()}
-                  style={S.sendBtn(streaming || !input.trim())}
-                  onMouseOver={(e) => { if (!streaming && input.trim()) e.currentTarget.style.opacity = '0.88' }}
-                  onMouseOut={(e) => { if (!streaming && input.trim()) e.currentTarget.style.opacity = '1' }}
-                  aria-label="Send"
-                >
-                  <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
-                    <path d="M13.5 8L2.5 3l2.5 5-2.5 5 11-5z" fill="currentColor"/>
-                  </svg>
-                </button>
+            {/* Input */}
+            <div className="px-8 pb-6 pt-4 bg-app-bg border-t border-app-border">
+              <div className="max-w-[680px] mx-auto">
+                <div className={`border bg-app-surface rounded-md transition-all ${
+                  inputFocused ? 'border-app-border-strong shadow-sm' : 'border-app-border'
+                }`}>
+                  <textarea
+                    ref={activeTextarea}
+                    value={input}
+                    rows={1}
+                    placeholder="Ask a legal question…"
+                    onChange={(e) => { setInput(e.target.value); grow(e.target) }}
+                    onKeyDown={onKey}
+                    onFocus={() => setInputFocused(true)}
+                    onBlur={() => setInputFocused(false)}
+                    disabled={streaming}
+                    className="w-full bg-transparent resize-none outline-none text-[13px] py-4 px-4 leading-relaxed text-app-text placeholder:text-app-text-subtle disabled:cursor-not-allowed"
+                  />
+                  <div className="flex items-center justify-between px-4 py-2.5 border-t border-app-border">
+                    <span className="text-[11px] text-app-text-subtle">
+                      {streaming
+                        ? <span className="flex items-center gap-2"><ThinkingIndicator /><span>Generating response…</span></span>
+                        : 'Shift+Enter for new line'
+                      }
+                    </span>
+                    <button
+                      onClick={() => sendMessage()}
+                      disabled={streaming || !input.trim()}
+                      className="flex items-center gap-1.5 px-4 py-1.5 rounded-sm text-[12px] font-medium transition-all disabled:opacity-40 cursor-pointer disabled:cursor-not-allowed"
+                      style={{ backgroundColor: '#1E2E4F', color: '#EEE9DF' }}
+                    >
+                      <IconSend /> Send
+                    </button>
+                  </div>
+                </div>
+                <p className="mt-2 text-[11px] text-app-text-subtle text-center">
+                  AI guidance only — always verify important matters with a qualified lawyer
+                </p>
               </div>
-              <p style={{ textAlign: 'center', fontSize: '12px', color: 'var(--text-subtle)', marginTop: '8px' }}>
-                Shift + Enter for new line
-              </p>
             </div>
           </>
+
         ) : (
-          <div style={S.emptyState}>
-            <div style={S.emptyMark}>LS</div>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', alignItems: 'center' }}>
-              <h1 style={S.emptyHeading}>LegalSathi AI</h1>
-              <p style={S.emptyDesc}>
-                Ask legal questions and get context-aware answers grounded in your documents.
+
+          /* ─── Hero / Empty State ─── */
+          <div className="flex-1 flex flex-col items-center justify-center p-8">
+            <div className="w-full max-w-[560px] space-y-10">
+
+              {/* Identity */}
+              <div className="text-center space-y-3">
+                <div className="w-12 h-12 rounded-sm flex items-center justify-center mx-auto mb-5" style={{ backgroundColor: '#1E2E4F' }}>
+                  <span className="text-[13px] font-bold font-mono" style={{ color: '#EEE9DF' }}>LS</span>
+                </div>
+                <h1 className="text-[32px] font-bold text-app-text font-display leading-tight">
+                  LegalSathi AI
+                </h1>
+                <p className="text-[14px] text-app-text-muted max-w-sm mx-auto">
+                  AI-powered legal assistant for Nepal. Ask questions, research law, understand your rights.
+                </p>
+              </div>
+
+              {/* Input */}
+              <div className={`border bg-app-surface rounded-sm transition-colors ${
+                inputFocused ? 'border-app-border-strong shadow-sm' : 'border-app-border'
+              }`}>
+                <textarea
+                  ref={heroTextarea}
+                  value={input}
+                  rows={3}
+                  placeholder="Describe your legal question or situation…"
+                  onChange={(e) => { setInput(e.target.value); grow(e.target) }}
+                  onKeyDown={onKey}
+                  onFocus={() => setInputFocused(true)}
+                  onBlur={() => setInputFocused(false)}
+                  className="w-full bg-transparent resize-none outline-none text-[14px] p-5 leading-relaxed text-app-text placeholder:text-app-text-subtle"
+                />
+                <div className="flex justify-between items-center px-5 py-3 border-t border-app-border">
+                  <span className="text-[11px] text-app-text-subtle">Enter to send · Shift+Enter for new line</span>
+                  <button
+                    onClick={() => sendMessage()}
+                    disabled={streaming || !input.trim()}
+                    className="flex items-center gap-2 px-4 py-1.5 rounded-sm text-[12px] font-medium transition-all disabled:opacity-40"
+                    style={{ backgroundColor: '#1E2E4F', color: '#EEE9DF' }}
+                  >
+                    <IconSend /> Send
+                  </button>
+                </div>
+              </div>
+
+              {/* Suggestions */}
+              <div className="grid grid-cols-3 gap-3">
+                {SUGGESTIONS.map((s) => (
+                  <button
+                    key={s}
+                    onClick={() => { setInput(s); heroTextarea.current?.focus() }}
+                    className="text-left px-4 py-3 border border-app-border bg-app-surface hover:border-app-border-strong hover:bg-app-surface-hover rounded-sm text-[12px] text-app-text-muted hover:text-app-text transition-all cursor-pointer"
+                  >
+                    {s}
+                  </button>
+                ))}
+              </div>
+
+              <p className="text-center text-[11px] text-app-text-subtle pt-2 border-t border-app-border">
+                © 2026 LegalSathi · AI guidance only — always consult a qualified lawyer
               </p>
             </div>
-            <button
-              style={S.startBtn}
-              onClick={newConversation}
-              onMouseOver={(e) => (e.currentTarget.style.opacity = '0.88')}
-              onMouseOut={(e) => (e.currentTarget.style.opacity = '1')}
-            >
-              Start a chat
-            </button>
           </div>
         )}
       </main>
-
-      <style>{`
-        @keyframes pulse {
-          0%, 100% { opacity: 0.3; transform: scale(0.8); }
-          50% { opacity: 1; transform: scale(1); }
-        }
-      `}</style>
     </div>
   )
 }
