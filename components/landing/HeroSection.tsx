@@ -15,30 +15,32 @@ const steps = [
   '4. Register for PAN/VAT at Inland Revenue',
 ]
 
+const trafficLightClasses = ['bg-red-300', 'bg-yellow-300', 'bg-green-300'] as const
+
 export function HeroSection() {
   return (
-    <section style={{ position: 'relative', overflow: 'hidden', padding: '100px 24px 96px', background: '#fafbff', textAlign: 'center' }}>
+    <section className="relative overflow-hidden pt-[100px] px-6 pb-24 bg-[#fafbff] text-center">
       {/* Subtle radial glow */}
-      <div style={{ position: 'absolute', top: 0, left: '50%', transform: 'translateX(-50%)', width: '900px', height: '600px', background: 'radial-gradient(ellipse 70% 70% at 50% 0%, rgba(37,99,235,0.06) 0%, transparent 65%)', pointerEvents: 'none' }} />
+      <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[900px] h-[600px] bg-[radial-gradient(ellipse_70%_70%_at_50%_0%,rgba(37,99,235,0.06)_0%,transparent_65%)] pointer-events-none" />
 
-      <div style={{ position: 'relative', maxWidth: '900px', margin: '0 auto' }}>
+      <div className="relative max-w-[900px] mx-auto">
         {/* Badge */}
         <motion.div
           initial={{ opacity: 0, y: 14 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.4 }}
-          style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', padding: '5px 14px', borderRadius: '100px', border: '1px solid rgba(37,99,235,0.2)', background: 'rgba(37,99,235,0.05)', color: C.primary, fontSize: '12px', fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase' as const, marginBottom: '28px' }}
+          className="inline-flex items-center gap-1.5 px-3.5 py-[5px] rounded-full border border-blue-600/20 bg-blue-600/5 text-[#2563eb] text-xs font-bold tracking-[0.06em] uppercase mb-7"
         >
           <RiSparklingLine size={12} />
           Powered by Claude AI · Built for Nepal
         </motion.div>
 
-        {/* Headline — editorial */}
+        {/* Headline */}
         <motion.h1
           initial={{ opacity: 0, y: 28 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.65, delay: 0.1, ease: EASE }}
-          style={{ fontSize: 'clamp(3rem, 8vw, 5.5rem)', fontWeight: 800, color: '#0a0f1e', letterSpacing: '-0.04em', lineHeight: 1.05, marginBottom: '22px' }}
+          className="text-[clamp(3rem,8vw,5.5rem)] font-extrabold text-[#0a0f1e] tracking-[-0.04em] leading-[1.05] mb-[22px]"
         >
           Legal. Clarity.<br />
           For every Nepali.
@@ -49,7 +51,7 @@ export function HeroSection() {
           initial={{ opacity: 0, y: 18 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.5, delay: 0.22 }}
-          style={{ fontSize: '18px', color: '#64748b', lineHeight: 1.75, maxWidth: '500px', margin: '0 auto 36px' }}
+          className="text-lg text-slate-500 leading-7 max-w-[500px] mx-auto mb-9"
         >
           Ask anything. Get step-by-step legal guidance, document checklists, and plain-English explanations — instantly.
         </motion.p>
@@ -59,12 +61,12 @@ export function HeroSection() {
           initial={{ opacity: 0, y: 14 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.45, delay: 0.32 }}
-          style={{ display: 'flex', gap: '12px', justifyContent: 'center', flexWrap: 'wrap', marginBottom: '28px' }}
+          className="flex gap-3 justify-center flex-wrap mb-7"
         >
           <motion.div whileHover={{ scale: 1.03 }} whileTap={{ scale: 0.97 }}>
             <Link
               href="/chat"
-              style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', padding: '15px 32px', background: '#0a0f1e', color: '#fff', textDecoration: 'none', borderRadius: '12px', fontSize: '16px', fontWeight: 700, boxShadow: '0 4px 16px rgba(0,0,0,0.15)' }}
+              className="inline-flex items-center gap-2 px-8 py-[15px] bg-[#0a0f1e] text-white no-underline rounded-xl text-base font-bold shadow-[0_4px_16px_rgba(0,0,0,0.15)]"
             >
               Try Demo <ArrowRight size={16} />
             </Link>
@@ -72,7 +74,7 @@ export function HeroSection() {
           <motion.div whileHover={{ scale: 1.03 }} whileTap={{ scale: 0.97 }}>
             <a
               href="#features"
-              style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', padding: '15px 32px', background: '#fff', color: '#0a0f1e', textDecoration: 'none', borderRadius: '12px', fontSize: '16px', fontWeight: 600, border: '1.5px solid #e2e8f0', boxShadow: '0 2px 6px rgba(0,0,0,0.04)' }}
+              className="inline-flex items-center gap-2 px-8 py-[15px] bg-white text-[#0a0f1e] no-underline rounded-xl text-base font-semibold border-[1.5px] border-slate-200 shadow-[0_2px_6px_rgba(0,0,0,0.04)]"
             >
               <FileText size={16} /> Learn More
             </a>
@@ -84,11 +86,11 @@ export function HeroSection() {
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           transition={{ duration: 0.5, delay: 0.44 }}
-          style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '20px', flexWrap: 'wrap', marginBottom: '64px' }}
+          className="flex items-center justify-center gap-5 flex-wrap mb-16"
         >
           {trustItems.map((t, i) => (
-            <span key={i} style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '13px', color: '#94a3b8', fontWeight: 500 }}>
-              <span style={{ width: '4px', height: '4px', borderRadius: '50%', background: '#cbd5e1', display: 'inline-block', flexShrink: 0 }} />
+            <span key={i} className="flex items-center gap-1.5 text-[13px] text-slate-400 font-medium">
+              <span className="w-1 h-1 rounded-full bg-slate-300 inline-block shrink-0" />
               {t}
             </span>
           ))}
@@ -99,45 +101,45 @@ export function HeroSection() {
           initial={{ opacity: 0, y: 40 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.7, delay: 0.52, ease: EASE }}
-          style={{ maxWidth: '640px', margin: '0 auto', background: '#fff', borderRadius: '20px', border: '1px solid #e2e8f0', boxShadow: '0 24px 64px rgba(0,0,0,0.08), 0 4px 12px rgba(0,0,0,0.04)', overflow: 'hidden', textAlign: 'left' }}
+          className="max-w-[640px] mx-auto bg-white rounded-[20px] border border-slate-200 shadow-[0_24px_64px_rgba(0,0,0,0.08),0_4px_12px_rgba(0,0,0,0.04)] overflow-hidden text-left"
         >
           {/* Window chrome */}
-          <div style={{ padding: '13px 18px', borderBottom: '1px solid #f1f5f9', display: 'flex', alignItems: 'center', gap: '7px', background: '#fafafa' }}>
-            {(['#fca5a5', '#fcd34d', '#86efac'] as const).map((c, i) => (
-              <div key={i} style={{ width: '10px', height: '10px', borderRadius: '50%', background: c }} />
+          <div className="px-[18px] py-[13px] border-b border-slate-100 flex items-center gap-[7px] bg-[#fafafa]">
+            {trafficLightClasses.map((cls, i) => (
+              <div key={i} className={`w-2.5 h-2.5 rounded-full ${cls}`} />
             ))}
-            <div style={{ marginLeft: '10px', flex: 1, height: '24px', borderRadius: '5px', background: '#f1f5f9', display: 'flex', alignItems: 'center', padding: '0 12px' }}>
-              <span style={{ fontSize: '11px', color: '#94a3b8' }}>LegalSathi AI — Legal Assistant</span>
+            <div className="ml-2.5 flex-1 h-6 rounded-[5px] bg-slate-100 flex items-center px-3">
+              <span className="text-[11px] text-slate-400">LegalSathi AI — Legal Assistant</span>
             </div>
           </div>
 
           {/* Conversation */}
-          <div style={{ padding: '20px', display: 'flex', flexDirection: 'column', gap: '14px' }}>
+          <div className="p-5 flex flex-col gap-[14px]">
             {/* User bubble */}
-            <div style={{ alignSelf: 'flex-end', maxWidth: '72%', padding: '10px 16px', background: '#0a0f1e', color: '#fff', borderRadius: '14px 14px 4px 14px', fontSize: '14px', lineHeight: 1.5 }}>
+            <div className="self-end max-w-[72%] px-4 py-2.5 bg-[#0a0f1e] text-white rounded-[14px_14px_4px_14px] text-sm leading-[1.5]">
               How do I register a business in Nepal?
             </div>
             {/* AI response */}
-            <div style={{ alignSelf: 'flex-start', maxWidth: '84%', padding: '16px', background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '4px 14px 14px 14px' }}>
-              <div style={{ fontWeight: 700, marginBottom: '8px', fontSize: '14px', color: '#0f172a' }}>To register a business in Nepal:</div>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+            <div className="self-start max-w-[84%] p-4 bg-slate-50 border border-slate-200 rounded-[4px_14px_14px_14px]">
+              <div className="font-bold mb-2 text-sm text-slate-900">To register a business in Nepal:</div>
+              <div className="flex flex-col gap-1">
                 {steps.map((s, i) => (
-                  <div key={i} style={{ fontSize: '13px', color: '#475569', lineHeight: 1.55 }}>{s}</div>
+                  <div key={i} className="text-[13px] text-slate-600 leading-[1.55]">{s}</div>
                 ))}
               </div>
-              <div style={{ marginTop: '12px', display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
-                <span style={{ display: 'inline-flex', alignItems: 'center', gap: '5px', padding: '4px 10px', background: C.primaryTint, borderRadius: '6px', fontSize: '12px', color: C.primary, fontWeight: 600 }}>📋 4 documents required</span>
-                <span style={{ display: 'inline-flex', alignItems: 'center', gap: '5px', padding: '4px 10px', background: '#f0fdf4', borderRadius: '6px', fontSize: '12px', color: '#059669', fontWeight: 600 }}>⏱ Est. 7–14 days</span>
+              <div className="mt-3 flex gap-2 flex-wrap">
+                <span className="inline-flex items-center gap-[5px] px-2.5 py-1 bg-[#eff6ff] rounded-md text-xs text-[#2563eb] font-semibold">📋 4 documents required</span>
+                <span className="inline-flex items-center gap-[5px] px-2.5 py-1 bg-[#f0fdf4] rounded-md text-xs text-emerald-600 font-semibold">⏱ Est. 7–14 days</span>
               </div>
             </div>
           </div>
 
           {/* Input bar */}
-          <div style={{ padding: '12px 16px', borderTop: '1px solid #f1f5f9', display: 'flex', gap: '10px', alignItems: 'center', background: '#fafafa' }}>
-            <div style={{ flex: 1, height: '36px', borderRadius: '8px', background: '#f1f5f9', display: 'flex', alignItems: 'center', padding: '0 12px' }}>
-              <span style={{ fontSize: '13px', color: '#94a3b8' }}>Ask your legal question…</span>
+          <div className="px-4 py-3 border-t border-slate-100 flex gap-2.5 items-center bg-[#fafafa]">
+            <div className="flex-1 h-9 rounded-lg bg-slate-100 flex items-center px-3">
+              <span className="text-[13px] text-slate-400">Ask your legal question…</span>
             </div>
-            <div style={{ width: '36px', height: '36px', borderRadius: '8px', background: '#0a0f1e', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+            <div className="w-9 h-9 rounded-lg bg-[#0a0f1e] flex items-center justify-center">
               <ArrowRight size={14} color="#fff" />
             </div>
           </div>
