@@ -85,7 +85,7 @@ export async function POST(request: NextRequest) {
           }
         }
       } catch (err) {
-        streamError = err instanceof Error ? err.message : 'Stream error'
+        streamError = friendlyError(err)
         controller.enqueue(encoder.encode(`data: ${JSON.stringify({ error: streamError })}\n\n`))
       } finally {
         if (fullResponse) {
@@ -197,6 +197,19 @@ export async function POST(request: NextRequest) {
       Connection: 'keep-alive',
     },
   })
+}
+
+function friendlyError(err: unknown): string {
+  const msg = (err instanceof Error ? err.message : String(err)).toLowerCase()
+  if (msg.includes('503') || msg.includes('unavailable') || msg.includes('high demand'))
+    return 'Our servers are a bit busy right now — try again in a moment.'
+  if (msg.includes('429') || msg.includes('quota') || msg.includes('resource_exhausted'))
+    return 'Too many requests at once. Give it a few seconds and try again.'
+  if (msg.includes('abort') || msg.includes('timed out') || msg.includes('timeout'))
+    return 'Took too long to respond. Try a shorter question.'
+  if (msg.includes('401') || msg.includes('403') || msg.includes('api_key') || msg.includes('unauthenticated'))
+    return 'Something went wrong on our end — contact support.'
+  return 'Something went wrong. Try again.'
 }
 
 async function generateTitle(conversationId: string, firstMessage: string) {

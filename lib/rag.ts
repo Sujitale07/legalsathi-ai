@@ -12,6 +12,7 @@ export type RetrievedChunk = {
   documentTitle: string
   chunkIndex: number
   totalChunks: number
+  domain?: string   // which legal domain this chunk came from
 }
 
 export type Source = {
@@ -22,7 +23,6 @@ export type Source = {
   pages?: number[]
 }
 
-// Extract all [PAGE N] markers from chunk content
 function extractPages(content: string): number[] {
   const matches = [...content.matchAll(/\[PAGE (\d+)\]/g)]
   return [...new Set(matches.map(m => parseInt(m[1])))]
@@ -30,14 +30,65 @@ function extractPages(content: string): number[] {
 
 // ─── Config ───────────────────────────────────────────────────────────────────
 
-const SIMILARITY_THRESHOLD  = 0.45   // lowered: hybrid re-ranks, so we cast a wider vector net
-const MAX_CHUNKS            = 6
-const MAX_CONTEXT_WORDS     = 2000
-const RRF_K                 = 60     // standard RRF constant
+const SIMILARITY_THRESHOLD = 0.45
+const MAX_CHUNKS           = 6
+const MAX_CONTEXT_WORDS    = 2500
+const RRF_K                = 60
 
-// ─── Query expansion ─────────────────────────────────────────────────────────
-// Prepend domain-specific legal vocabulary so the query embedding lands in
-// the same vector space as formal Nepali legal documents.
+// ─── Domain Detection ─────────────────────────────────────────────────────────
+//
+// Detects which legal domains a query touches beyond the primary (chat) domain.
+// Used to trigger cross-domain parallel retrieval.
+
+const DOMAIN_SIGNALS: Record<string, RegExp> = {
+  traffic:  /\b(license|bluebook|vehicle|driving|bike|car|motorbike|chalani|transport|traffic|road|motorcycle|category|endorse|donotm|dotm)\b/i,
+  taxation: /\b(tax|vat|pan|ird|revenue|fee|tirne|tir|payment|kar|income|customs|shulk|dastoor|rajaswa|fiscal)\b|कर|शुल्क|दस्तुर|राजस्व/i,
+  business: /\b(company|firm|ocr|business|trade|enterprise|incorporate|pvt|ltd|proprietor|startup)\b/i,
+  labor:    /\b(salary|wage|job|employment|worker|leave|bonus|hire|fire|terminate|employer|employee|labour|labor|pf|provident)\b/i,
+  property: /\b(land|property|house|plot|deed|transfer|lalpurja|cadastral|real.?estate)\b|जग्गा|सम्पत्ति/i,
+  divorce:  /\b(divorce|marriage|custody|alimony|separation|spouse|matrimonial)\b/i,
+  general:  /\b(rights|citizenship|nid|court|complaint|constitution|fundamental|writ|police)\b/i,
+}
+
+// Domains that are naturally coupled: when primary domain is X and the query
+// contains fee/tax signals, also pull from the coupled domain.
+const COUPLED_DOMAINS: Record<string, string[]> = {
+  traffic:  ['taxation'],   // bluebook/license renewal → vehicle tax, road tax
+  business: ['taxation'],   // company registration → PAN/VAT registration
+  property: ['taxation'],   // land transfer → stamp duty, capital gains revenue
+  labor:    ['taxation'],   // employment → TDS on salary
+}
+
+// Trigger pattern: signals that cross-domain tax/revenue retrieval is needed
+const TAX_SIGNALS = /\b(tax|fee|tirne|payment|revenue|shulk|kar|pay|vat|pan|ird|dastoor|rajaswa|charge|cost|amount|fine|penalty)\b|कर|शुल्क|दस्तुर|राजस्व/i
+
+function detectQueryDomains(query: string, primaryDomain: string): string[] {
+  const domains: string[] = [primaryDomain]
+
+  // Step 1: Check coupled domains — add them if tax/fee signals present in query
+  for (const coupled of (COUPLED_DOMAINS[primaryDomain] ?? [])) {
+    if (domains.includes(coupled)) continue
+    const domainSignal = DOMAIN_SIGNALS[coupled]
+    if (TAX_SIGNALS.test(query) || (domainSignal && domainSignal.test(query))) {
+      domains.push(coupled)
+    }
+  }
+
+  // Step 2: Direct domain signals — add any domain the query explicitly mentions
+  if (domains.length < 3) {
+    for (const [domain, signal] of Object.entries(DOMAIN_SIGNALS)) {
+      if (domains.includes(domain)) continue
+      if (signal.test(query)) {
+        domains.push(domain)
+        if (domains.length >= 3) break
+      }
+    }
+  }
+
+  return domains
+}
+
+// ─── Query Expansion ─────────────────────────────────────────────────────────
 
 const DOMAIN_PREFIXES: Record<string, string> = {
   traffic:  'Nepal motor vehicle traffic law rule fine violation सवारी यातायात नियम',
@@ -54,23 +105,19 @@ function expandQuery(query: string, domain: string): string {
   return `${prefix} ${query}`
 }
 
-// ─── Retrieval ────────────────────────────────────────────────────────────────
+// ─── Single-Domain Retrieval ──────────────────────────────────────────────────
 
-export async function retrieveRelevantChunks(query: string, domain: string): Promise<RetrievedChunk[]> {
-  // Expand query with domain vocabulary before embedding
+async function retrieveFromDomain(
+  query: string,
+  domain: string,
+  limit: number,
+): Promise<RetrievedChunk[]> {
   const expanded       = expandQuery(query, domain)
   const queryEmbedding = await generateEmbedding(expanded)
   const vec            = `[${queryEmbedding.join(',')}]`
-  const vecLimit       = MAX_CHUNKS * 3
-  const ftsLimit       = MAX_CHUNKS * 3
+  const vecLimit       = limit * 3
+  const ftsLimit       = limit * 3
 
-  // Hybrid search: vector cosine + BM25-style full-text, fused via Reciprocal Rank Fusion (RRF)
-  //
-  // vec_ranked  → top chunks by cosine similarity (filtered by threshold)
-  // fts_ranked  → top chunks by PostgreSQL ts_rank_cd full-text search
-  //               catches exact legal terms (section numbers, act names in Nepali/English)
-  //               that pure semantic search misses
-  // fused       → RRF score = 1/(k+rank_vec) + 1/(k+rank_fts); both arms contribute
   const rows = await prisma.$queryRaw<RetrievedChunk[]>`
     WITH
       vec_ranked AS (
@@ -124,14 +171,56 @@ export async function retrieveRelevantChunks(query: string, domain: string): Pro
     JOIN   "DocumentChunk" dc ON dc.id    = fused.id
     JOIN   "Document"      d  ON d.id     = dc."documentId"
     ORDER  BY fused.rrf_score DESC
-    LIMIT  ${MAX_CHUNKS * 2}
+    LIMIT  ${limit * 2}
   `
 
-  // ── Context budget (word cap) ──
+  // Tag each chunk with its source domain
+  return rows.map(r => ({ ...r, domain }))
+}
+
+// ─── Cross-Domain Retrieval ───────────────────────────────────────────────────
+
+export async function retrieveRelevantChunks(query: string, primaryDomain: string): Promise<RetrievedChunk[]> {
+  const domains  = detectQueryDomains(query, primaryDomain)
+  const perLimit = domains.length === 1
+    ? MAX_CHUNKS
+    : Math.ceil((MAX_CHUNKS + 2) / domains.length)   // slight over-fetch, then trim
+
+  // Parallel retrieval — primary domain failure is fatal; secondary failures are silent
+  const perDomainResults = await Promise.all(
+    domains.map((d, idx) =>
+      retrieveFromDomain(query, d, perLimit).catch(err => {
+        if (idx === 0) throw err   // primary domain must succeed
+        console.error(`Cross-domain retrieval failed for ${d}:`, err)
+        return [] as RetrievedChunk[]
+      })
+    )
+  )
+
+  // Interleave: alternate between primary and secondary to maintain diversity
+  // (primary domain always gets first pick at each round)
+  const seen   = new Set<string>()
+  const merged: RetrievedChunk[] = []
+  const maxLen = Math.max(...perDomainResults.map(r => r.length))
+
+  for (let i = 0; i < maxLen; i++) {
+    for (const domainChunks of perDomainResults) {
+      if (i < domainChunks.length) {
+        const c = domainChunks[i]
+        if (!seen.has(c.id)) {
+          seen.add(c.id)
+          merged.push(c)
+        }
+      }
+    }
+  }
+
+  // Sort by RRF score, then apply word budget
+  merged.sort((a, b) => b.similarity - a.similarity)
+
   const budget: RetrievedChunk[] = []
   let totalWords = 0
-
-  for (const chunk of rows.slice(0, MAX_CHUNKS)) {
+  for (const chunk of merged.slice(0, MAX_CHUNKS)) {
     const words = chunk.content.split(/\s+/).length
     if (totalWords + words > MAX_CONTEXT_WORDS) break
     budget.push(chunk)
@@ -141,7 +230,7 @@ export async function retrieveRelevantChunks(query: string, domain: string): Pro
   return budget
 }
 
-// ─── Prompt builder ───────────────────────────────────────────────────────────
+// ─── Prompt Builder ───────────────────────────────────────────────────────────
 
 const SCENARIO_SCHEMA = `{
   "scenario_id": "string",
@@ -259,7 +348,7 @@ ITEM SHAPES BY UI VARIANT (use EXACT field names):
 
 MAP ENTITIES:
 - Always suggest relevant Nepali institutions (e.g., Ward Office, Ward 24 Office Kathmandu, Department of Industry, Office of Company Registrar Tripureshwor, Inland Revenue Department, Customs Office, etc.) that the user must visit.
-- Optional: populate "image_url" with a beautiful Unsplash photo URL relevant to the place or general Nepali buildings (e.g. "https://images.unsplash.com/photo-1544735716-392fe2489ffa?auto=format&fit=crop&w=400&q=80" or similar) if applicable.
+- Leave "image_url" empty — the UI supplies the correct image automatically.
 
 COSTS: Always NPR, always range format. Never hallucinate specific fee amounts — use reasonable ranges.
 LAWYERS: Only include if genuinely relevant to the question.
@@ -275,18 +364,25 @@ export function buildSystemPrompt(chunks: RetrievedChunk[], domain: string): { s
     pages:         extractPages(c.content),
   }))
 
-  const domainConfig = getDomain(domain)
+  const domainConfig       = getDomain(domain)
   const domainInstructions = domainConfig?.systemInstructions ?? ''
 
-  // Build the XML context block
+  // Detect if we have cross-domain context (chunks from multiple legal domains)
+  const domainsPresent  = [...new Set(chunks.map(c => c.domain).filter(Boolean))]
+  const isMultiDomain   = domainsPresent.length > 1
+  const crossDomainNote = isMultiDomain
+    ? `\n    CROSS-ACT NOTE: This response draws from multiple legal Acts (${domainsPresent.join(', ')}). Cite each Act separately. Clearly distinguish between what the Traffic/Transport Act says vs. what the Tax/Revenue rules say. The user's question spans multiple laws — address each dimension explicitly.`
+    : ''
+
   const contextBlock = chunks.length > 0
     ? `\n\n<retrieved_legal_context>\n${
         chunks.map((c, i) => {
-          const pages = extractPages(c.content)
-          const pageAttr = pages.length > 0 ? ` pages="${pages.join(', ')}"` : ''
-          return `  <source id="${i + 1}" document="${c.documentTitle}"${pageAttr} chunk="${c.chunkIndex + 1} of ${c.totalChunks}" relevance="${c.similarity.toFixed(2)}">\n    <content>\n${c.content}\n    </content>\n  </source>`
+          const pages     = extractPages(c.content)
+          const pageAttr  = pages.length > 0 ? ` pages="${pages.join(', ')}"` : ''
+          const domainAttr = c.domain && c.domain !== domain ? ` domain="${c.domain}"` : ''
+          return `  <source id="${i + 1}" document="${c.documentTitle}"${pageAttr}${domainAttr} chunk="${c.chunkIndex + 1} of ${c.totalChunks}" relevance="${c.similarity.toFixed(2)}">\n    <content>\n${c.content}\n    </content>\n  </source>`
         }).join('\n')
-      }\n  <context_boundary>\n    Prioritize the source documents above when answering. When citing a source, include the page number if available (e.g. "Traffic Signs Manual, p.12"). If the sources do not fully cover the question but it is within the domain scope, supplement with your pre-trained knowledge of Nepalese law. Only use the fallback phrase if the question is genuinely out of scope or completely unanswerable.\n  </context_boundary>\n</retrieved_legal_context>`
+      }\n  <context_boundary>\n    Prioritize the source documents above when answering. When citing a source, include the page number if available (e.g. "Traffic Signs Manual, p.12"). If the sources do not fully cover the question but it is within the domain scope, supplement with your pre-trained knowledge of Nepalese law. Only use the fallback phrase if the question is genuinely out of scope or completely unanswerable.${crossDomainNote}\n  </context_boundary>\n</retrieved_legal_context>`
     : `\n\n[NO KNOWLEDGE BASE DOCUMENTS AVAILABLE FOR THIS QUERY]\nThe vector knowledge base for this domain is currently empty or returned no matches. You MUST use your pre-trained knowledge of Nepalese law to answer the question. Do NOT say you cannot find a legal basis — answer helpfully using what you know about Nepal's laws, staying strictly within this domain's scope.`
 
   const system = `${domainInstructions}

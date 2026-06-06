@@ -121,6 +121,97 @@ const MARQUEE_ITEMS = [
   'Tax Filers', 'New Graduates', 'Employers', 'Lawyers',
 ]
 
+const CYCLING_DOMAINS = ['Business Registration', 'Traffic Violations', 'Tax Filing', 'Property Law', 'Labor Disputes', 'Family Law']
+
+function HeroSection() {
+  const [idx, setIdx] = useState(0)
+  const [visible, setVisible] = useState(true)
+
+  useEffect(() => {
+    const id = setInterval(() => {
+      setVisible(false)
+      setTimeout(() => {
+        setIdx((i) => (i + 1) % CYCLING_DOMAINS.length)
+        setVisible(true)
+      }, 320)
+    }, 2200)
+    return () => clearInterval(id)
+  }, [])
+
+  return (
+    <section style={{ background: 'var(--color-app-bg)', padding: '88px 28px 0', borderBottom: '1px solid var(--color-app-border)' }}>
+      <div style={{ maxWidth: 640, margin: '0 auto', textAlign: 'center' }}>
+
+        {/* Badge */}
+        <div className="hero-1" style={{ display: 'inline-flex', alignItems: 'center', gap: 7, background: 'var(--color-app-surface)', border: '1px solid var(--color-app-border)', borderRadius: 6, padding: '5px 14px', marginBottom: 28 }}>
+          <span className="pulse-dot" style={{ width: 7, height: 7, borderRadius: '50%', background: '#22c55e', display: 'inline-block', flexShrink: 0 }} />
+          <span style={{ fontSize: 12, color: 'var(--color-app-text-muted)' }}>Trained on Nepali law · Available 24/7</span>
+        </div>
+
+        {/* Headline */}
+        <h1 className="hero-2" style={{ fontFamily: 'var(--font-display), Georgia, serif', fontSize: 'clamp(36px, 5.5vw, 58px)', fontWeight: 600, lineHeight: 1.1, color: 'var(--color-app-text)', letterSpacing: '-0.028em', marginBottom: 16 }}>
+          Nepal&apos;s AI Legal Assistant for Every Legal Journey
+        </h1>
+
+        {/* Cycling subtext */}
+        <p className="hero-3" style={{ fontSize: 16, lineHeight: 1.72, color: 'var(--color-app-text-muted)', marginBottom: 36 }}>
+          Ask about{' '}
+          <span
+            key={idx}
+            className="word-cycle"
+            style={{
+              fontWeight: 600,
+              color: 'var(--color-app-accent)',
+              opacity: visible ? 1 : 0,
+              transition: 'opacity 0.3s ease',
+            }}
+          >
+            {CYCLING_DOMAINS[idx]}
+          </span>
+          {' '}— get a step-by-step roadmap in plain Nepali or English.
+        </p>
+
+        {/* CTAs */}
+        <div className="hero-4" style={{ display: 'flex', gap: 10, justifyContent: 'center', marginBottom: 14 }}>
+          <Link href="/chat" style={{ display: 'inline-flex', alignItems: 'center', gap: 8, fontSize: 14, fontWeight: 500, color: '#EEE9DF', background: '#1E2E4F', padding: '12px 24px', borderRadius: 7, textDecoration: 'none' }}>
+            Try LegalSathi AI Free <IconArrow />
+          </Link>
+          <a href="#how-it-works" style={{ fontSize: 14, fontWeight: 500, color: 'var(--color-app-text)', padding: '12px 24px', borderRadius: 7, textDecoration: 'none', border: '1px solid var(--color-app-border-strong)' }}>
+            See How It Works
+          </a>
+        </div>
+
+        <p className="hero-5" style={{ fontSize: 12, color: 'var(--color-app-text-subtle)', marginBottom: 56 }}>
+          Free to use · No sign-up required · Works in Nepali &amp; English
+        </p>      
+
+      </div>
+
+      {/* Interactive domain grid */}
+      <div style={{ maxWidth: 640, margin: '64px auto 0', paddingBottom: 80 }}>
+        <p style={{ fontSize: 13, color: 'var(--color-app-text-muted)', textAlign: 'center', marginBottom: 20 }}>
+          Select a domain below to start your session
+        </p>
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+          {DOMAINS.map((domain, i) => (
+            <Link
+              key={domain.slug}
+              href={`/chat?domain=${domain.slug}`}
+              data-reveal
+              data-d={String(Math.min(i + 1, 7))}
+              className={`domain-card text-left px-5 py-4 border border-app-border bg-app-surface rounded-sm cursor-pointer group no-underline ${domain.slug === 'general' ? 'col-span-2 sm:col-span-3' : ''}`}
+            >
+              <div className="text-[22px] mb-2">{domain.icon}</div>
+              <div className="text-[13px] font-semibold text-app-text group-hover:text-app-accent font-display mb-1">{domain.label}</div>
+              <div className="text-[11.5px] text-app-text-subtle leading-relaxed">{domain.description}</div>
+            </Link>
+          ))}
+        </div>
+      </div>
+    </section>
+  )
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 
 export default function LandingPage() {
@@ -142,22 +233,22 @@ export default function LandingPage() {
       {/* ══ NAV ══════════════════════════════════════════════════════════════ */}
       <header style={{
         position: 'sticky', top: 0, zIndex: 50,
-        background: 'rgba(19,29,48,0.96)',
+        background: 'rgba(250,248,244,0.94)',
         backdropFilter: 'blur(12px)',
-        borderBottom: '1px solid rgba(255,255,255,0.07)',
+        borderBottom: '1px solid var(--color-app-border)',
       }}>
         <div style={{ maxWidth: 1100, margin: '0 auto', padding: '0 28px', height: 56, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 9 }}>
-            <div style={{ width: 28, height: 28, borderRadius: 5, background: '#EEE9DF', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-              <span style={{ fontSize: 10, fontWeight: 700, color: '#131D30', fontFamily: 'var(--font-mono)' }}>LS</span>
+            <div style={{ width: 28, height: 28, borderRadius: 5, background: '#1E2E4F', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+              <span style={{ fontSize: 10, fontWeight: 700, color: '#EEE9DF', fontFamily: 'var(--font-mono)' }}>LS</span>
             </div>
-            <span style={{ fontSize: 15, fontWeight: 600, color: '#EEE9DF', letterSpacing: '-0.01em', fontFamily: 'var(--font-display)' }}>LegalSathi</span>
+            <span style={{ fontSize: 15, fontWeight: 600, color: 'var(--color-app-text)', letterSpacing: '-0.01em', fontFamily: 'var(--font-display)' }}>LegalSathi</span>
           </div>
           <nav style={{ display: 'flex', alignItems: 'center', gap: 28 }}>
             {[['#how-it-works', 'How it works'], ['#testimonials', 'Reviews']].map(([href, label]) => (
-              <a key={href} href={href} style={{ fontSize: 13, color: 'rgba(238,233,223,0.6)', textDecoration: 'none' }}>{label}</a>
+              <a key={href} href={href} style={{ fontSize: 13, color: 'var(--color-app-text-muted)', textDecoration: 'none' }}>{label}</a>
             ))}
-            <Link href="/chat" style={{ fontSize: 13, fontWeight: 500, color: '#131D30', background: '#EEE9DF', padding: '7px 18px', borderRadius: 6, textDecoration: 'none' }}>
+            <Link href="/chat" style={{ fontSize: 13, fontWeight: 500, color: '#EEE9DF', background: '#1E2E4F', padding: '7px 18px', borderRadius: 6, textDecoration: 'none' }}>
               Try Free
             </Link>
           </nav>
@@ -165,129 +256,7 @@ export default function LandingPage() {
       </header>
 
       {/* ══ HERO ═════════════════════════════════════════════════════════════ */}
-      <section style={{ background: '#131D30', padding: '80px 28px 72px' }}>
-        <div style={{ maxWidth: 1100, margin: '0 auto', display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 72, alignItems: 'center' }}>
-
-          {/* Left: copy */}
-          <div>
-            <div className="hero-1" style={{ display: 'inline-flex', alignItems: 'center', gap: 7, background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 6, padding: '5px 14px', marginBottom: 28 }}>
-              <span className="pulse-dot" style={{ width: 7, height: 7, borderRadius: '50%', background: '#22c55e', display: 'inline-block', flexShrink: 0 }} />
-              <span style={{ fontSize: 12, color: 'rgba(238,233,223,0.6)', letterSpacing: '0.01em' }}>Trained on Nepali law · Available 24/7</span>
-            </div>
-
-            <h1 className="hero-2" style={{
-              fontFamily: 'var(--font-display), Georgia, serif',
-              fontSize: 'clamp(36px, 4.2vw, 54px)',
-              fontWeight: 600,
-              lineHeight: 1.1,
-              color: '#F0EDE6',
-              letterSpacing: '-0.028em',
-              marginBottom: 20,
-            }}>
-              Nepal&apos;s AI Legal Assistant for Every Legal Journey
-            </h1>
-
-            <p className="hero-3" style={{ fontSize: 16, lineHeight: 1.72, color: 'rgba(238,233,223,0.55)', marginBottom: 36, maxWidth: 420 }}>
-              Ask any legal question in Nepali or English. Get a step-by-step roadmap — what to do, where to go, which documents to bring, and what it costs.
-            </p>
-
-            <div className="hero-4" style={{ display: 'flex', gap: 10, marginBottom: 20 }}>
-              <Link href="/chat" style={{ display: 'inline-flex', alignItems: 'center', gap: 8, fontSize: 14, fontWeight: 500, color: '#131D30', background: '#F0EDE6', padding: '12px 24px', borderRadius: 7, textDecoration: 'none' }}>
-                Try LegalSathi AI Free <IconArrow />
-              </Link>
-              <a href="#how-it-works" style={{ fontSize: 14, fontWeight: 500, color: 'rgba(238,233,223,0.7)', padding: '12px 24px', borderRadius: 7, textDecoration: 'none', border: '1px solid rgba(255,255,255,0.13)' }}>
-                See How It Works
-              </a>
-            </div>
-
-            <p className="hero-5" style={{ fontSize: 12, color: 'rgba(238,233,223,0.28)' }}>
-              Free to use · No sign-up required · Works in Nepali &amp; English
-            </p>
-          </div>
-
-          {/* Right: app mockup */}
-          <div className="hero-5" style={{ background: '#FAF8F4', borderRadius: 10, overflow: 'hidden', boxShadow: '0 32px 64px rgba(0,0,0,0.45), 0 4px 16px rgba(0,0,0,0.3)', border: '1px solid rgba(255,255,255,0.06)' }}>
-            {/* Window chrome */}
-            <div style={{ padding: '10px 14px', background: '#F3EFE8', borderBottom: '1px solid #E2D9CF', display: 'flex', alignItems: 'center', gap: 6 }}>
-              <span style={{ width: 10, height: 10, borderRadius: '50%', background: '#EDBBBB', display: 'inline-block' }} />
-              <span style={{ width: 10, height: 10, borderRadius: '50%', background: '#EDD9BB', display: 'inline-block' }} />
-              <span style={{ width: 10, height: 10, borderRadius: '50%', background: '#C8EDBB', display: 'inline-block' }} />
-              <span style={{ flex: 1, background: '#EAE4DC', borderRadius: 4, height: 18, marginLeft: 8, display: 'flex', alignItems: 'center', paddingLeft: 8 }}>
-                <span style={{ fontSize: 10, color: '#9A8E84' }}>legalsathi.ai</span>
-              </span>
-            </div>
-
-            {/* App content: domain picker */}
-            <div style={{ padding: '28px 24px 24px' }}>
-              <div style={{ textAlign: 'center', marginBottom: 20 }}>
-                <div style={{ width: 36, height: 36, borderRadius: 5, background: '#1E2E4F', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 10px' }}>
-                  <span style={{ fontSize: 10, fontWeight: 700, color: '#EEE9DF', fontFamily: 'var(--font-mono)' }}>LS</span>
-                </div>
-                <p style={{ fontSize: 12, color: '#5C5349', marginBottom: 0 }}>Select a legal domain to begin</p>
-              </div>
-
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6 }}>
-                {DOMAINS.map((d) => (
-                  <div
-                    key={d.slug}
-                    style={{
-                      padding: '9px 11px',
-                      background: '#FFFFFF',
-                      border: '1px solid #E2D9CF',
-                      borderRadius: 4,
-                      gridColumn: d.slug === 'general' ? '1 / -1' : undefined,
-                    }}
-                  >
-                    <div style={{ fontSize: 15, marginBottom: 3 }}>{d.icon}</div>
-                    <div style={{ fontSize: 10.5, fontWeight: 600, color: '#1A1A2E', marginBottom: 2 }}>{d.label}</div>
-                    <div style={{ fontSize: 9.5, color: '#9A8E84', lineHeight: 1.4, overflow: 'hidden', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical' }}>
-                      {d.description}
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-          </div>
-
-        </div>
-      </section>
-
-      {/* ══ DOMAIN PREVIEW ═══════════════════════════════════════════════════ */}
-      <section style={{ background: 'var(--color-app-bg)', padding: '72px 28px 80px', borderBottom: '1px solid var(--color-app-border)' }}>
-        <div style={{ maxWidth: 640, margin: '0 auto' }}>
-          <div data-reveal style={{ textAlign: 'center', marginBottom: 32 }}>
-            <div className="w-12 h-12 rounded-sm flex items-center justify-center mx-auto mb-4" style={{ backgroundColor: '#1E2E4F' }}>
-              <span className="text-[13px] font-bold font-mono" style={{ color: '#EEE9DF' }}>LS</span>
-            </div>
-            <p className="text-[14px] text-app-text-muted max-w-sm mx-auto">
-              Select a legal domain to begin. Your session will be strictly locked to that topic.
-            </p>
-          </div>
-
-          {/* Domain grid — exact markup + styles from chat app */}
-          <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
-            {DOMAINS.map((domain, i) => (
-              <Link
-                key={domain.slug}
-                href={`/chat?domain=${domain.slug}`}
-                data-reveal
-                data-d={String(Math.min(i + 1, 7))}
-                className={`domain-card text-left px-5 py-4 border border-app-border bg-app-surface rounded-sm cursor-pointer group no-underline ${
-                  domain.slug === 'general' ? 'col-span-2 sm:col-span-3' : ''
-                }`}
-              >
-                <div className="text-[22px] mb-2">{domain.icon}</div>
-                <div className="text-[13px] font-semibold text-app-text group-hover:text-app-accent font-display mb-1">
-                  {domain.label}
-                </div>
-                <div className="text-[11.5px] text-app-text-subtle leading-relaxed">
-                  {domain.description}
-                </div>
-              </Link>
-            ))}
-          </div>
-        </div>
-      </section>
+      <HeroSection />
 
       {/* ══ MARQUEE ══════════════════════════════════════════════════════════ */}
       <section style={{ background: 'var(--color-app-surface)', borderBottom: '1px solid var(--color-app-border)', padding: '18px 0' }}>
@@ -343,6 +312,59 @@ export default function LandingPage() {
               </div>
             ))}
           </div>
+        </div>
+      </section>
+
+      {/* ══ WHY LEGALSATHI ═══════════════════════════════════════════════════ */}
+      <section style={{ background: 'var(--color-app-surface)', borderTop: '1px solid var(--color-app-border)', borderBottom: '1px solid var(--color-app-border)', padding: '100px 28px' }}>
+        <div style={{ maxWidth: 1100, margin: '0 auto' }}>
+
+          <div data-reveal style={{ marginBottom: 64 }}>
+            <h2 style={{ fontFamily: 'var(--font-display), Georgia, serif', fontSize: 'clamp(28px, 3.5vw, 40px)', fontWeight: 600, letterSpacing: '-0.025em', color: 'var(--color-app-text)', marginBottom: 16, lineHeight: 1.18 }}>
+              ChatGPT says &ldquo;consult a lawyer.&rdquo;<br />Google returns a 2019 blog post.
+            </h2>
+            <p style={{ fontSize: 15, color: 'var(--color-app-text-muted)', lineHeight: 1.7, maxWidth: 580 }}>
+              Neither knows which counter at Bagmati Province Transport Office handles your case. Neither knows the fee changed last year, or that the clerk will reject your application if you don&apos;t bring a notarized copy — not a photocopy. LegalSathi knows.
+            </p>
+          </div>
+
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', gap: 1, background: 'var(--color-app-border)', border: '1px solid var(--color-app-border)', borderRadius: 8, overflow: 'hidden' }}>
+            {[
+              {
+                situation: 'You ask Google how to register a Private Limited Company.',
+                problem: 'You get a blog from 2021 with outdated OCR requirements and no mention of the mandatory PAN registration that happens within 3 days.',
+                fix: 'LegalSathi gives you the current step-by-step flow: name reservation → MoA/AoA → OCR submission → PAN at IRD — with fees and days for each.',
+              },
+              {
+                situation: 'You ask ChatGPT about renewing your driving licence.',
+                problem: 'It tells you to "visit your nearest transport office" and brings up renewal periods that apply to India. It cannot tell you whether to go to Ekantakuna or Minbhawan.',
+                fix: 'LegalSathi tells you exactly which office handles your zone, what biometric process to expect, and which documents go in which form.',
+              },
+              {
+                situation: 'You search for how to file a labour complaint.',
+                problem: 'You find a general answer about labour law. No mention of the Department of Labour, the complaint form number, the 35-day limitation window, or that you need your appointment letter.',
+                fix: 'LegalSathi walks you through the exact filing steps, the limitation period, the documents required, and what to expect at the hearing.',
+              },
+            ].map((card, i) => (
+              <div
+                key={i}
+                data-reveal
+                data-d={String(i + 1)}
+                style={{ padding: '32px 28px', background: 'var(--color-app-surface)' }}
+              >
+                <p style={{ fontSize: 13, fontWeight: 600, color: 'var(--color-app-text)', marginBottom: 12, lineHeight: 1.5 }}>
+                  {card.situation}
+                </p>
+                <p style={{ fontSize: 13, color: 'var(--color-app-text-muted)', lineHeight: 1.65, marginBottom: 16, paddingBottom: 16, borderBottom: '1px solid var(--color-app-border)' }}>
+                  {card.problem}
+                </p>
+                <p style={{ fontSize: 13, color: 'var(--color-app-accent)', lineHeight: 1.65, fontWeight: 500, margin: 0 }}>
+                  {card.fix}
+                </p>
+              </div>
+            ))}
+          </div>
+
         </div>
       </section>
 

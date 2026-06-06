@@ -1,5 +1,7 @@
 'use client'
 
+import { lookupOfficeImage } from '@/lib/officeImages'
+
 // ─── Types ────────────────────────────────────────────────────────────────────
 
 type Item = Record<string, unknown>
@@ -397,13 +399,13 @@ function MapEntitiesSection({ entities }: { entities: MapEntity[] }) {
     other:         { bg: '#F3EFE8', color: '#5C5349' },
   }
 
-  const defaultImages: Record<string, string> = {
-    municipality:  'https://images.unsplash.com/photo-1577495508048-b635879837f1?auto=format&fit=crop&w=400&q=80',
-    tax_office:    'https://images.unsplash.com/photo-1541872703-74c5e44368f9?auto=format&fit=crop&w=400&q=80',
-    customs:       'https://images.unsplash.com/photo-1578575437130-527eed3abbec?auto=format&fit=crop&w=400&q=80',
-    government:    'https://images.unsplash.com/photo-1544735716-392fe2489ffa?auto=format&fit=crop&w=400&q=80',
-    legal_firm:    'https://images.unsplash.com/photo-1589829545856-d10d557cf95f?auto=format&fit=crop&w=400&q=80',
-    other:         'https://images.unsplash.com/photo-1486406146926-c627a92ad1ab?auto=format&fit=crop&w=400&q=80'
+  const typeIcons: Record<string, string> = {
+    municipality: '🏛️',
+    tax_office:   '🧾',
+    customs:      '📦',
+    government:   '🏢',
+    legal_firm:   '⚖️',
+    other:        '🏢',
   }
 
   return (
@@ -412,18 +414,27 @@ function MapEntitiesSection({ entities }: { entities: MapEntity[] }) {
       <div className="grid grid-cols-2 gap-3 mt-3">
         {entities.map((e, i) => {
           const c = typeColors[e.type] ?? typeColors.other
+          const imageUrl = e.image_url || lookupOfficeImage(e.name)
           return (
             <div
               key={i}
               className="rounded-lg border overflow-hidden flex flex-col"
               style={{ borderColor: '#E2D9CF', backgroundColor: '#FFFFFF' }}
             >
-              {/* Image of the place */}
-              <img 
-                src={e.image_url || defaultImages[e.type] || defaultImages.other} 
-                alt={e.name}
-                className="w-full h-28 object-cover"
-              />
+              {imageUrl ? (
+                <img
+                  src={imageUrl}
+                  alt={e.name}
+                  className="w-full h-28 object-cover"
+                />
+              ) : (
+                <div
+                  className="w-full h-28 flex items-center justify-center"
+                  style={{ backgroundColor: c.bg }}
+                >
+                  <span style={{ fontSize: 38 }}>{typeIcons[e.type] ?? '🏢'}</span>
+                </div>
+              )}
               
               {/* Body content */}
               <div className="p-3.5 flex-1 flex flex-col justify-between">
