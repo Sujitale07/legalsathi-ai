@@ -7,10 +7,9 @@ const ai = new GoogleGenAI({
   apiKey: (process.env.GEMINI_API_KEY ?? process.env.GOOGLE_API_KEY)!,
 })
 
-const CHAT_MODEL  = 'gemini-2.5-flash'
+const CHAT_MODEL  = process.env.GEMINI_MODEL ?? 'gemini-2.5-flash'
 const MAX_HISTORY = 10
 
-// Convert stored messages to Gemini's content format
 function toGeminiHistory(messages: { role: string; content: string }[]) {
   return messages.map((m) => ({
     role: m.role === 'assistant' ? 'model' : 'user',
@@ -39,26 +38,29 @@ export async function POST(request: NextRequest) {
     return Response.json({ error: 'Conversation not found' }, { status: 404 })
   }
 
-  // Persist user message
   await prisma.message.create({
     data: { role: 'user', content: message, conversationId },
   })
 
-  // Auto-title on first message
-  if (conversation.title === 'New Chat' || conversation.title === 'New chat') {
-    generateTitle(conversationId, message).catch(() => {})
+  const needsTitle = conversation.title === 'New Chat' || conversation.title === 'New chat'
+
+  const domain = conversation.domain ?? 'general'
+
+  let system: string, sources: ReturnType<typeof buildSystemPrompt>['sources']
+  try {
+    const chunks = await retrieveRelevantChunks(message, domain)
+    ;({ system, sources } = buildSystemPrompt(chunks, domain))
+  } catch (err) {
+    console.error('RAG retrieval failed:', err)
+    ;({ system, sources } = buildSystemPrompt([], domain))
   }
 
-  // RAG retrieval
-  const chunks = await retrieveRelevantChunks(message)
-  const { system, sources } = buildSystemPrompt(chunks)
-
-  // Trim history to last MAX_HISTORY messages
   const history = toGeminiHistory(conversation.messages.slice(-MAX_HISTORY))
 
   const encoder = new TextEncoder()
   let fullResponse = ''
   let streamError: string | null = null
+  let isJsonMode = false
 
   const readable = new ReadableStream({
     async start(controller) {
@@ -66,55 +68,110 @@ export async function POST(request: NextRequest) {
         const stream = await ai.models.generateContentStream({
           model: CHAT_MODEL,
           contents: [...history, { role: 'user', parts: [{ text: message }] }],
-          config: {
-            systemInstruction: system,
-            maxOutputTokens: 2048,
-          },
+          config: { systemInstruction: system, maxOutputTokens: 8192, temperature: 0 },
         })
 
         for await (const chunk of stream) {
           const text = chunk.candidates?.[0]?.content?.parts?.[0]?.text ?? ''
           if (text) {
             fullResponse += text
-            controller.enqueue(encoder.encode(`data: ${JSON.stringify({ text })}\n\n`))
+            if (!isJsonMode && fullResponse.trimStart().length > 0) {
+              const start = fullResponse.trimStart().slice(0, 3)
+              isJsonMode = start.startsWith('{') || start.startsWith('```')
+            }
+            if (!isJsonMode) {
+              controller.enqueue(encoder.encode(`data: ${JSON.stringify({ text })}\n\n`))
+            }
           }
         }
       } catch (err) {
         streamError = err instanceof Error ? err.message : 'Stream error'
         controller.enqueue(encoder.encode(`data: ${JSON.stringify({ error: streamError })}\n\n`))
       } finally {
-        // Persist assistant turn
         if (fullResponse) {
           await prisma.message.create({
             data: { role: 'assistant', content: fullResponse, conversationId },
           })
         }
 
-        // Send sources
         controller.enqueue(encoder.encode(`data: ${JSON.stringify({ sources })}\n\n`))
 
-        // Generate follow-up suggestions
-        if (fullResponse && !streamError) {
-          try {
-            const suggRes = await ai.models.generateContent({
-              model: CHAT_MODEL,
-              contents: [{
-                role: 'user',
-                parts: [{ text: `Based on this legal Q&A, generate exactly 3 brief follow-up questions a Nepali user might ask next. Return ONLY a raw JSON array of 3 strings, max 9 words each. No markdown, no explanation.
-Q: ${message.slice(0, 300)}
-A: ${fullResponse.slice(0, 500)}` }],
-              }],
-              config: { maxOutputTokens: 150 },
-            })
-            const raw = suggRes.candidates?.[0]?.content?.parts?.[0]?.text?.trim() ?? ''
-            const match = raw.match(/\[[\s\S]*?\]/)
-            if (match) {
-              const suggestions: unknown = JSON.parse(match[0])
-              if (Array.isArray(suggestions) && suggestions.length > 0) {
-                controller.enqueue(encoder.encode(`data: ${JSON.stringify({ suggestions })}\n\n`))
+        // Parse scenario JSON — use regex to ignore code fences and trailing trigger codes
+        let parsedAsScenario = false
+        if (fullResponse) {
+          const jsonMatch = fullResponse.match(/\{[\s\S]*\}/)
+          if (jsonMatch) {
+            try {
+              const scenario = JSON.parse(jsonMatch[0])
+              if (scenario && typeof scenario === 'object' && scenario.sections) {
+                // Attach real lawyers from DB — isolated so a DB error never blocks scenario rendering
+                if (Array.isArray(scenario.required_lawyers) && scenario.required_lawyers.length > 0) {
+                  try {
+                    // Fallback map: AI sometimes uses natural names not in DB schema
+                    const TYPE_MAP: Record<string, string> = {
+                      traffic_lawyer:   'civil_lawyer',
+                      transport_lawyer: 'civil_lawyer',
+                      vehicle_lawyer:   'civil_lawyer',
+                      contract_lawyer:  'corporate_lawyer',
+                      business_registration_lawyer: 'corporate_lawyer',
+                      litigation_lawyer: 'civil_lawyer',
+                      general_lawyer:   'civil_lawyer',
+                    }
+                    const types: string[] = scenario.required_lawyers
+                      .map((l: { type?: string }) => {
+                        const t = l.type?.toLowerCase().trim() ?? ''
+                        return TYPE_MAP[t] ?? t
+                      })
+                      .filter(Boolean)
+                    if (types.length > 0) {
+                      const matched = await prisma.lawyer.findMany({
+                        where: { available: true, specialties: { hasSome: types } },
+                        orderBy: { experience: 'desc' },
+                        take: 4,
+                      })
+                      if (matched.length > 0) scenario.matched_lawyers = matched
+                    }
+                  } catch (e) {
+                    console.error('Lawyer DB fetch failed:', e)
+                  }
+                }
+                controller.enqueue(encoder.encode(`data: ${JSON.stringify({ scenario })}\n\n`))
+                parsedAsScenario = true
               }
-            }
-          } catch { /* skip suggestions on error */ }
+            } catch { /* not valid JSON */ }
+          }
+
+          // Fallback: if response looked like JSON but failed, send as text
+          if (!parsedAsScenario && isJsonMode) {
+            const stripped = fullResponse
+              .replace(/^```json\s*\n?/, '').replace(/^```\s*\n?/, '')
+              .replace(/\n?```\s*$/, '').trim()
+            controller.enqueue(encoder.encode(`data: ${JSON.stringify({ text: stripped })}\n\n`))
+          }
+        }
+
+        if (fullResponse && !streamError) {
+          const titleTask = needsTitle ? generateTitle(conversationId, message) : Promise.resolve()
+
+          const suggestionsTask = (async () => {
+            try {
+              const suggRes = await ai.models.generateContent({
+                model: CHAT_MODEL,
+                contents: [{ role: 'user', parts: [{ text: `Based on this legal Q&A, generate exactly 3 brief follow-up questions a Nepali user might ask next. Return ONLY a raw JSON array of 3 strings, max 9 words each. No markdown, no explanation.\nQ: ${message.slice(0, 300)}\nA: ${fullResponse.slice(0, 500)}` }] }],
+                config: { maxOutputTokens: 150 },
+              })
+              const raw = suggRes.candidates?.[0]?.content?.parts?.[0]?.text?.trim() ?? ''
+              const match = raw.match(/\[[\s\S]*?\]/)
+              if (match) {
+                const suggestions: unknown = JSON.parse(match[0])
+                if (Array.isArray(suggestions) && suggestions.length > 0) {
+                  controller.enqueue(encoder.encode(`data: ${JSON.stringify({ suggestions })}\n\n`))
+                }
+              }
+            } catch { /* skip */ }
+          })()
+
+          await Promise.allSettled([titleTask, suggestionsTask])
         }
 
         controller.enqueue(encoder.encode('data: [DONE]\n\n'))
@@ -126,7 +183,9 @@ A: ${fullResponse.slice(0, 500)}` }],
   return new Response(readable, {
     headers: {
       'Content-Type': 'text/event-stream',
-      'Cache-Control': 'no-cache',
+      'Cache-Control': 'no-cache, no-store, must-revalidate',
+      Pragma: 'no-cache',
+      Expires: '0',
       Connection: 'keep-alive',
     },
   })
@@ -135,12 +194,7 @@ A: ${fullResponse.slice(0, 500)}` }],
 async function generateTitle(conversationId: string, firstMessage: string) {
   const res = await ai.models.generateContent({
     model: CHAT_MODEL,
-    contents: [{
-      role: 'user',
-      parts: [{ text: `Write a 4-6 word title for a legal chat that starts with this question.
-Reply with ONLY the title, no quotes, no punctuation at the end.
-Question: ${firstMessage.slice(0, 200)}` }],
-    }],
+    contents: [{ role: 'user', parts: [{ text: `Write a 4-6 word title for a legal chat that starts with this question.\nReply with ONLY the title, no quotes, no punctuation at the end.\nQuestion: ${firstMessage.slice(0, 200)}` }] }],
     config: { maxOutputTokens: 20 },
   })
   const title = (res.candidates?.[0]?.content?.parts?.[0]?.text ?? '').trim().slice(0, 80)

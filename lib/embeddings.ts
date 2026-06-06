@@ -103,7 +103,7 @@ export async function generateEmbeddingsBatch(texts: string[]): Promise<number[]
     const res       = await withRetry(() =>
       ai.models.embedContent({
         model: EMBED_MODEL,
-        contents: batch,
+        contents: batch.map(text => ({ role: 'user', parts: [{ text }] })),
         config: { outputDimensionality: EMBED_DIMS },
       })
     )

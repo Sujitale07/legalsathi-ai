@@ -1,17 +1,15 @@
 'use client'
 
 import { useState, useEffect, useRef, useCallback } from 'react'
+import Link from 'next/link'
+import LegalResponse from '@/components/LegalResponse'
+import ScenarioRenderer from '@/components/ScenarioRenderer'
+import { DOMAINS } from '@/lib/domains'
 
 type Message    = { id: string; role: string; content: string; createdAt: string }
-type Conversation = { id: string; title: string; updatedAt: string }
+type Conversation = { id: string; title: string; domain: string; updatedAt: string }
 type Document   = { id: string; title: string; status: string; _count: { chunks: number } }
 type Source     = { documentId: string; documentTitle: string; chunkIndex: number; totalChunks: number }
-
-const SUGGESTIONS = [
-  'Tenant rights in Nepal',
-  'Employment contract clauses',
-  'Civil case filing steps',
-]
 
 // ─── Functional Icons ─────────────────────────────────────────────────────────
 
@@ -89,6 +87,61 @@ const ThinkingIndicator = () => (
   </div>
 )
 
+// ─── Message Skeleton ────────────────────────────────────────────────────────
+
+const MessageSkeleton = () => (
+  <div className="animate-pulse space-y-8">
+    <div className="flex gap-4 items-start">
+      <div className="w-7 h-7 rounded-lg bg-[#E2D9CF] shrink-0" />
+      <div className="flex-1 space-y-3 pt-1">
+        <div className="h-3 bg-[#E2D9CF] rounded w-24" />
+        <div className="space-y-2">
+          <div className="h-4 bg-[#E2D9CF] rounded w-5/6" />
+          <div className="h-4 bg-[#E2D9CF] rounded w-3/4" />
+        </div>
+      </div>
+    </div>
+    <div className="flex justify-end">
+      <div className="w-1/2 h-12 bg-[#E2D9CF] rounded-lg" style={{ borderRadius: '18px 18px 4px 18px' }} />
+    </div>
+    <div className="flex gap-4 items-start">
+      <div className="w-7 h-7 rounded-lg bg-[#E2D9CF] shrink-0" />
+      <div className="flex-1 space-y-3 pt-1">
+        <div className="h-3 bg-[#E2D9CF] rounded w-24" />
+        <div className="space-y-2">
+          <div className="h-4 bg-[#E2D9CF] rounded w-4/5" />
+          <div className="h-4 bg-[#E2D9CF] rounded w-2/3" />
+        </div>
+      </div>
+    </div>
+  </div>
+)
+// ─── History Skeleton ────────────────────────────────────────────────────────
+
+const HistorySkeleton = () => (
+  <div className="animate-pulse space-y-2 px-3 pt-2">
+    {[0, 1, 2, 3, 4].map((i) => (
+      <div key={i} className="flex items-center gap-2 py-1.5">
+        <div className="w-4 h-4 rounded bg-[#2D4070] shrink-0" />
+        <div className="h-3 bg-[#2D4070] rounded w-3/4" />
+      </div>
+    ))}
+  </div>
+)
+
+// ─── Docs Skeleton ───────────────────────────────────────────────────────────
+
+const DocsSkeleton = () => (
+  <div className="animate-pulse space-y-1">
+    {[0, 1, 2].map((i) => (
+      <div key={i} className="flex justify-between items-center px-2.5 py-1.5 rounded-sm" style={{ backgroundColor: '#243564' }}>
+        <div className="h-3 bg-[#2D4070] rounded w-2/3" />
+        <div className="h-3 bg-[#2D4070] rounded w-6" />
+      </div>
+    ))}
+  </div>
+)
+
 // ─── Component ────────────────────────────────────────────────────────────────
 
 export default function ChatPage() {
@@ -97,6 +150,12 @@ export default function ChatPage() {
   const [messages, setMessages] = useState<Message[]>([])
   const [input, setInput] = useState('')
   const [streaming, setStreaming] = useState(false)
+  const [sending, setSending] = useState(false)
+  const [loadingConversation, setLoadingConversation] = useState(false)
+  const [loadingHistory, setLoadingHistory] = useState(true)
+  const [loadingDocs, setLoadingDocs] = useState(true)
+  const [streamingMsgId, setStreamingMsgId] = useState<string | null>(null)
+  const [failedMsgs, setFailedMsgs] = useState<Record<string, string>>({}) // id → error text
   const [documents, setDocuments] = useState<Document[]>([])
   const [uploadTitle, setUploadTitle] = useState('')
   const [uploadContent, setUploadContent] = useState('')
@@ -105,27 +164,50 @@ export default function ChatPage() {
   const [inputFocused, setInputFocused] = useState(false)
   const [messageSources, setMessageSources] = useState<Record<string, Source[]>>({})
   const [messageSuggestions, setMessageSuggestions] = useState<Record<string, string[]>>({})
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const [messageScenarios, setMessageScenarios] = useState<Record<string, any>>({})
   const [copiedId, setCopiedId] = useState<string | null>(null)
+  const [deletingIds, setDeletingIds] = useState<Set<string>>(new Set())
+  const [selectedDomain, setSelectedDomain] = useState<string | null>(null)
 
   const bottomRef = useRef<HTMLDivElement>(null)
+  const scrollContainerRef = useRef<HTMLDivElement>(null)
+  const shouldScrollSmoothRef = useRef(false)
+  const prevLengthRef = useRef(messages.length)
+  const sendingRef = useRef(false)
+
   const activeTextarea = useRef<HTMLTextAreaElement>(null)
   const heroTextarea = useRef<HTMLTextAreaElement>(null)
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null)
   const documentsRef = useRef<Document[]>([])
   useEffect(() => { documentsRef.current = documents })
 
-  const activeTitle = conversations.find(c => c.id === activeId)?.title ?? 'New Chat'
+  const activeConv = conversations.find(c => c.id === activeId)
+  const activeTitle = activeConv?.title ?? 'New Chat'
+  const activeDomainConfig = DOMAINS.find(d => d.slug === (activeConv?.domain ?? selectedDomain ?? 'general'))
 
   // ── Data ──────────────────────────────────────────────────────────────────
 
   const loadConversations = useCallback(async () => {
-    const res = await fetch('/api/conversations')
-    setConversations(await res.json())
+    try {
+      const res = await fetch('/api/conversations')
+      setConversations(await res.json())
+    } catch (err) {
+      console.error(err)
+    } finally {
+      setLoadingHistory(false)
+    }
   }, [])
 
   const loadDocuments = useCallback(async () => {
-    const res = await fetch('/api/documents')
-    setDocuments(await res.json())
+    try {
+      const res = await fetch('/api/documents')
+      setDocuments(await res.json())
+    } catch (err) {
+      console.error(err)
+    } finally {
+      setLoadingDocs(false)
+    }
   }, [])
 
   useEffect(() => {
@@ -161,60 +243,91 @@ export default function ChatPage() {
 
   const selectConversation = useCallback(async (conv: Conversation) => {
     setActiveId(conv.id)
+    setLoadingConversation(true)
     setMessages([])
-    const res = await fetch(`/api/conversations/${conv.id}`)
-    const data = await res.json()
-    setMessages(data.messages ?? [])
+    shouldScrollSmoothRef.current = false
+    try {
+      const res = await fetch(`/api/conversations/${conv.id}`)
+      const data = await res.json()
+      setMessages(data.messages ?? [])
+    } catch (err) {
+      console.error(err)
+    } finally {
+      setLoadingConversation(false)
+    }
   }, [])
 
-  const newConversation = useCallback(async () => {
-    const res = await fetch('/api/conversations', { method: 'POST' })
-    const conv = await res.json()
-    setConversations((p) => [conv, ...p])
-    setActiveId(conv.id)
+  const newConversation = useCallback(() => {
+    setActiveId(null)
     setMessages([])
-    setTimeout(() => activeTextarea.current?.focus(), 60)
+    setSelectedDomain(null)
+    shouldScrollSmoothRef.current = false
+    setTimeout(() => heroTextarea.current?.focus(), 60)
   }, [])
 
   const deleteConversation = useCallback(async (id: string, e: React.MouseEvent) => {
     e.stopPropagation()
-    await fetch(`/api/conversations/${id}`, { method: 'DELETE' })
+    if (deletingIds.has(id)) return
+    setDeletingIds(p => new Set(p).add(id))
     setConversations((p) => p.filter((c) => c.id !== id))
     if (activeId === id) { setActiveId(null); setMessages([]) }
-  }, [activeId])
+    await fetch(`/api/conversations/${id}`, { method: 'DELETE' })
+    setDeletingIds(p => { const n = new Set(p); n.delete(id); return n })
+  }, [activeId, deletingIds])
 
   const sendMessage = useCallback(async (override?: string) => {
     const text = (override ?? input).trim()
-    if (!text || streaming) return
+    if (!text || streaming || sendingRef.current) return
 
-    let convId = activeId
-    if (!convId) {
-      const res = await fetch('/api/conversations', { method: 'POST' })
-      const conv = await res.json()
-      setConversations((p) => [conv, ...p])
-      setActiveId(conv.id)
-      convId = conv.id
-    }
-
-    setInput('')
-    if (activeTextarea.current) activeTextarea.current.style.height = 'auto'
-    if (heroTextarea.current) heroTextarea.current.style.height = 'auto'
-
-    const aiId = `ai-${Date.now()}`
-    setMessages((p) => [
-      ...p,
-      { id: `u-${Date.now()}`, role: 'user', content: text, createdAt: new Date().toISOString() },
-      { id: aiId, role: 'assistant', content: '', createdAt: new Date().toISOString() },
-    ])
-    setStreaming(true)
+    sendingRef.current = true
+    setSending(true)
+    let aiId = ''
 
     try {
+      let convId = activeId
+      if (!convId) {
+        const res = await fetch('/api/conversations', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ domain: selectedDomain ?? 'general' }),
+        })
+        if (!res.ok) throw new Error('Failed to create conversation')
+        const conv = await res.json()
+        // Provisional title from the user's message — AI-generated title replaces it after stream
+        const provisionalTitle = text.length > 55 ? text.slice(0, 52).trimEnd() + '…' : text
+        setConversations((p) => [{ ...conv, title: provisionalTitle }, ...p])
+        setActiveId(conv.id)
+        convId = conv.id
+      }
+
+      setInput('')
+      if (activeTextarea.current) activeTextarea.current.style.height = 'auto'
+      if (heroTextarea.current) heroTextarea.current.style.height = 'auto'
+
+      aiId = `ai-${Date.now()}`
+      shouldScrollSmoothRef.current = true
+      setMessages((p) => [
+        ...p,
+        { id: `u-${Date.now()}`, role: 'user', content: text, createdAt: new Date().toISOString() },
+        { id: aiId, role: 'assistant', content: '', createdAt: new Date().toISOString() },
+      ])
+      setStreaming(true)
+      setStreamingMsgId(aiId)
+
+      const abort = new AbortController()
+      const timeoutId = setTimeout(() => abort.abort(), 120_000) // 2-min hard timeout
+
       const res = await fetch('/api/chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ conversationId: convId, message: text }),
+        signal: abort.signal,
       })
-      const reader = res.body!.getReader()
+      clearTimeout(timeoutId)
+
+      if (!res.ok) throw new Error(`Chat API error ${res.status}`)
+      const reader = res.body?.getReader()
+      if (!reader) throw new Error('No response body')
       const decoder = new TextDecoder()
       let buf = ''
 
@@ -234,21 +347,55 @@ export default function ChatPage() {
               setMessages(p => p.map(m => m.id === aiId ? { ...m, content: m.content + parsed.text } : m))
             } else if (parsed.sources) {
               setMessageSources(p => ({ ...p, [aiId]: parsed.sources }))
+            } else if (parsed.scenario) {
+              setMessageScenarios(p => ({ ...p, [aiId]: parsed.scenario }))
             } else if (parsed.suggestions) {
               setMessageSuggestions(p => ({ ...p, [aiId]: parsed.suggestions }))
+            } else if (parsed.error) {
+              setFailedMsgs(p => ({ ...p, [aiId]: parsed.error }))
             }
           } catch { /* skip malformed */ }
         }
       }
+    } catch (err) {
+      const errMsg = err instanceof Error
+        ? (err.name === 'AbortError' ? 'Request timed out — Gemini took too long.' : err.message)
+        : 'Something went wrong.'
+      setFailedMsgs(p => ({ ...p, [aiId]: errMsg }))
     } finally {
       setStreaming(false)
+      setStreamingMsgId(null)
+      sendingRef.current = false
+      setSending(false)
       loadConversations()
-      // Re-fetch after a short delay to capture auto-title (generated async on server)
       setTimeout(() => loadConversations(), 3500)
     }
-  }, [input, activeId, streaming, loadConversations])
+  }, [input, activeId, streaming, selectedDomain, loadConversations])
 
-  useEffect(() => { bottomRef.current?.scrollIntoView({ behavior: 'auto' }) }, [messages])
+  useEffect(() => {
+    const container = scrollContainerRef.current
+    if (!container) return
+
+    const isNewMessage = messages.length > prevLengthRef.current
+    prevLengthRef.current = messages.length
+
+    if (isNewMessage) {
+      if (shouldScrollSmoothRef.current) {
+        bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
+        shouldScrollSmoothRef.current = false
+      } else {
+        bottomRef.current?.scrollIntoView({ behavior: 'auto' })
+      }
+    } else if (streaming) {
+      const threshold = 150
+      const isAtBottom = container.scrollHeight - container.scrollTop - container.clientHeight < threshold
+      if (isAtBottom) {
+        bottomRef.current?.scrollIntoView({ behavior: 'auto' })
+      }
+    } else {
+      bottomRef.current?.scrollIntoView({ behavior: 'auto' })
+    }
+  }, [messages, streaming])
 
   const grow = useCallback((el: HTMLTextAreaElement) => {
     el.style.height = 'auto'
@@ -304,14 +451,29 @@ export default function ChatPage() {
           </span>
         </div>
 
+        {/* Navigation */}
+        <div className="p-3 border-b" style={{ borderColor: '#2D4070' }}>
+          <div className="space-y-1">
+            <Link
+              href="/chat"
+              className="flex items-center gap-2.5 px-3 py-2 rounded-sm text-[12px] font-medium transition-colors duration-150 cursor-pointer bg-[#2D4070] text-[#EEE9DF]"
+            >
+              <IconChat /> Chat Assistant
+            </Link>
+            <Link
+              href="/ingest"
+              className="flex items-center gap-2.5 px-3 py-2 rounded-sm text-[12px] font-medium transition-colors duration-150 cursor-pointer text-[#A8B4C8] hover:text-[#EEE9DF] hover:bg-[#2D4070]/30"
+            >
+              <IconDoc /> Data Ingestion
+            </Link>
+          </div>
+        </div>
+
         {/* New Chat */}
         <div className="p-3">
           <button
             onClick={newConversation}
-            className="w-full flex items-center gap-2.5 px-3 py-2 rounded-sm text-[12px] font-medium transition-colors cursor-pointer"
-            style={{ color: '#A8B4C8' }}
-            onMouseEnter={e => { (e.currentTarget as HTMLButtonElement).style.color = '#EEE9DF'; (e.currentTarget as HTMLButtonElement).style.backgroundColor = '#2D4070' }}
-            onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.color = '#A8B4C8'; (e.currentTarget as HTMLButtonElement).style.backgroundColor = 'transparent' }}
+            className="w-full flex items-center gap-2.5 px-3 py-2 rounded-sm text-[12px] font-medium transition-colors duration-150 cursor-pointer text-[#A8B4C8] hover:text-[#EEE9DF] hover:bg-[#2D4070]"
           >
             <IconPlus /> New Conversation
           </button>
@@ -324,32 +486,38 @@ export default function ChatPage() {
               Recent
             </div>
           )}
-          {conversations.map((conv) => {
-            const active = activeId === conv.id
-            return (
-              <div
-                key={conv.id}
-                onClick={() => selectConversation(conv)}
-                className="group flex items-center gap-2 px-3 py-2 cursor-pointer rounded-sm transition-all text-[12px]"
-                style={{
-                  backgroundColor: active ? '#2D4070' : 'transparent',
-                  color: active ? '#EEE9DF' : '#A8B4C8',
-                }}
-                onMouseEnter={e => { if (!active) { (e.currentTarget as HTMLDivElement).style.backgroundColor = '#243564'; (e.currentTarget as HTMLDivElement).style.color = '#EEE9DF' } }}
-                onMouseLeave={e => { if (!active) { (e.currentTarget as HTMLDivElement).style.backgroundColor = 'transparent'; (e.currentTarget as HTMLDivElement).style.color = '#A8B4C8' } }}
-              >
-                <IconChat />
-                <span className="flex-1 truncate">{conv.title}</span>
-                <button
-                  onClick={(e) => deleteConversation(conv.id, e)}
-                  className="opacity-0 group-hover:opacity-100 transition-opacity"
-                  style={{ color: '#6B7D9A' }}
+          {loadingHistory ? (
+            <HistorySkeleton />
+          ) : conversations.length === 0 ? (
+            <div className="px-3 py-4 text-[11px] italic text-center" style={{ color: '#6B7D9A' }}>
+              No history yet
+            </div>
+          ) : (
+            conversations.map((conv) => {
+              const active = activeId === conv.id
+              return (
+                <div
+                  key={conv.id}
+                  onClick={() => selectConversation(conv)}
+                  className={`group flex items-center gap-2 px-3 py-2 cursor-pointer rounded-sm transition-colors duration-150 text-[12px] ${
+                    active 
+                      ? 'bg-[#2D4070] text-[#EEE9DF]' 
+                      : 'text-[#A8B4C8] hover:bg-[#243564] hover:text-[#EEE9DF]'
+                  }`}
                 >
-                  <IconX />
-                </button>
-              </div>
-            )
-          })}
+                  <IconChat />
+                  <span className="flex-1 truncate">{conv.title}</span>
+                  <button
+                    onClick={(e) => deleteConversation(conv.id, e)}
+                    className="opacity-0 group-hover:opacity-100 hover:text-red-400 transition-all duration-150 p-1 rounded-sm cursor-pointer"
+                    style={{ color: '#6B7D9A' }}
+                  >
+                    <IconX />
+                  </button>
+                </div>
+              )
+            })
+          )}
         </div>
 
         {/* Knowledge Base */}
@@ -369,29 +537,37 @@ export default function ChatPage() {
           {docsOpen && (
             <div className="px-3 pb-4 space-y-2">
               <div className="max-h-32 overflow-y-auto space-y-1 sb-scroll">
-                {documents.map((doc) => (
-                  <div key={doc.id} className="flex justify-between items-center px-2.5 py-1.5 rounded-sm text-[11px] group" style={{ backgroundColor: '#243564' }}>
-                    <span className="truncate pr-2" style={{ color: '#A8B4C8' }}>{doc.title}</span>
-                    <div className="flex items-center gap-1.5 shrink-0">
-                      {doc.status === 'processing' && (
-                        <span className="text-[9px] font-medium text-yellow-400">Indexing…</span>
-                      )}
-                      {doc.status === 'failed' && (
-                        <span className="text-[9px] text-red-400">Failed</span>
-                      )}
-                      {doc.status === 'ready' && (
-                        <span className="text-[9px]" style={{ color: '#6B7D9A' }}>{doc._count.chunks}c</span>
-                      )}
-                      <button
-                        onClick={() => deleteDocument(doc.id)}
-                        className="opacity-0 group-hover:opacity-100 transition-opacity"
-                        style={{ color: '#6B7D9A' }}
-                      >
-                        <IconX />
-                      </button>
-                    </div>
+                {loadingDocs ? (
+                  <DocsSkeleton />
+                ) : documents.length === 0 ? (
+                  <div className="px-2.5 py-3 text-[10.5px] italic text-center" style={{ color: '#6B7D9A' }}>
+                    No documents uploaded
                   </div>
-                ))}
+                ) : (
+                  documents.map((doc) => (
+                    <div key={doc.id} className="flex justify-between items-center px-2.5 py-1.5 rounded-sm text-[11px] group" style={{ backgroundColor: '#243564' }}>
+                      <span className="truncate pr-2" style={{ color: '#A8B4C8' }}>{doc.title}</span>
+                      <div className="flex items-center gap-1.5 shrink-0">
+                        {doc.status === 'processing' && (
+                          <span className="text-[9px] font-medium text-yellow-400">Indexing…</span>
+                        )}
+                        {doc.status === 'failed' && (
+                          <span className="text-[9px] text-red-400">Failed</span>
+                        )}
+                        {doc.status === 'ready' && (
+                          <span className="text-[9px]" style={{ color: '#6B7D9A' }}>{doc._count.chunks}c</span>
+                        )}
+                        <button
+                          onClick={() => deleteDocument(doc.id)}
+                          className="opacity-0 group-hover:opacity-100 transition-opacity"
+                          style={{ color: '#6B7D9A' }}
+                        >
+                          <IconX />
+                        </button>
+                      </div>
+                    </div>
+                  ))
+                )}
               </div>
               <div className="space-y-1.5 pt-1">
                 <input
@@ -426,137 +602,180 @@ export default function ChatPage() {
       {/* ════════════════════ MAIN */}
       <main className="flex-1 flex flex-col min-w-0 bg-app-bg">
 
-        {activeId ? (
+        {(activeId || loadingConversation || sending) ? (
           <>
             {/* Header */}
             <header className="h-14 shrink-0 flex items-center justify-between px-8 border-b border-app-border bg-app-surface">
-              <h2 className="text-[17px] font-semibold text-app-text truncate max-w-md font-display">
-                {activeTitle}
-              </h2>
+              <div className="flex items-center gap-3 min-w-0">
+                <h2 className="text-[17px] font-semibold text-app-text truncate max-w-xs font-display">
+                  {activeTitle}
+                </h2>
+                {activeDomainConfig && (
+                  <span
+                    className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[10.5px] font-semibold shrink-0"
+                    style={{ backgroundColor: '#E8ECF4', color: '#1E2E4F', border: '1px solid #C8D4E8' }}
+                  >
+                    <span>{activeDomainConfig.icon}</span>
+                    <span>{activeDomainConfig.label}</span>
+                    <span style={{ color: '#9A8E84', marginLeft: 2 }}>· locked</span>
+                  </span>
+                )}
+              </div>
               <div className="flex items-center gap-2 text-[11px] text-app-text-subtle">
-                <div className={`w-1.5 h-1.5 rounded-full ${streaming ? 'bg-amber-400' : 'bg-emerald-500'}`} />
-                <span>{streaming ? 'Responding…' : 'Ready'}</span>
+                <div className={`w-1.5 h-1.5 rounded-full ${streaming || sending ? 'bg-amber-400' : 'bg-emerald-500'}`} />
+                <span>{streaming || sending ? 'Responding…' : 'Ready'}</span>
               </div>
             </header>
 
             {/* Messages */}
-            <div className="flex-1 overflow-y-auto scroll-area py-10" style={{ backgroundColor: '#FAF8F4' }}>
+            <div ref={scrollContainerRef} className="flex-1 overflow-y-auto scroll-area py-10" style={{ backgroundColor: '#FAF8F4' }}>
               <div className="max-w-[740px] mx-auto px-8 space-y-10">
 
-                {/* Empty state */}
-                {messages.length === 0 && (
+                {loadingConversation ? (
+                  <MessageSkeleton />
+                ) : messages.length === 0 ? (
+                  /* Empty state */
                   <div className="flex flex-col items-center justify-center py-24 text-center">
                     <div className="w-12 h-12 rounded-xl flex items-center justify-center mb-5 shadow-sm" style={{ backgroundColor: '#1E2E4F' }}>
                       <span className="text-[12px] font-bold font-mono" style={{ color: '#EEE9DF' }}>LS</span>
                     </div>
                     <p className="text-[17px] font-semibold text-app-text font-display mb-2">How can I help you?</p>
                     <p className="text-[13px] text-app-text-muted max-w-[280px] leading-relaxed">
-                      Ask any legal question. I'll reference your uploaded documents for grounded answers.
+                      Ask any legal question. I&apos;ll reference your uploaded documents for grounded answers.
                     </p>
                   </div>
-                )}
-
-                {messages.map((msg) => msg.role === 'user' ? (
-
-                  /* ── User bubble ── */
-                  <div key={msg.id} className="flex justify-end">
-                    <div
-                      className="max-w-[68%] px-5 py-3.5 text-[13.5px] leading-[1.7] shadow-sm"
-                      style={{
-                        backgroundColor: '#1E2E4F',
-                        color: '#EEE9DF',
-                        borderRadius: '18px 18px 4px 18px',
-                      }}
-                    >
-                      {msg.content}
-                    </div>
-                  </div>
-
                 ) : (
+                  messages.map((msg) => msg.role === 'user' ? (
 
-                  /* ── AI response (flat prose, no card) ── */
-                  <div key={msg.id} className="group flex gap-4 items-start">
-                    {/* Avatar */}
-                    <div
-                      className="w-7 h-7 shrink-0 rounded-lg flex items-center justify-center mt-0.5"
-                      style={{ backgroundColor: '#1E2E4F' }}
-                    >
-                      <span className="text-[9px] font-bold font-mono" style={{ color: '#EEE9DF' }}>LS</span>
+                    /* ── User bubble ── */
+                    <div key={msg.id} className="flex justify-end">
+                      <div
+                        className="max-w-[68%] px-5 py-3.5 text-[13.5px] leading-[1.7] shadow-sm"
+                        style={{
+                          backgroundColor: '#1E2E4F',
+                          color: '#EEE9DF',
+                          borderRadius: '18px 18px 4px 18px',
+                        }}
+                      >
+                        {msg.content}
+                      </div>
                     </div>
 
-                    {/* Content */}
-                    <div className="flex-1 min-w-0 space-y-3 pt-0.5">
+                  ) : (
 
-                      {/* Sender label + copy */}
-                      <div className="flex items-center justify-between">
-                        <span className="text-[11px] font-semibold font-display" style={{ color: '#1E2E4F' }}>LegalSathi</span>
-                        <button
-                          onClick={() => copyMessage(msg.id, msg.content)}
-                          className="flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-medium opacity-0 group-hover:opacity-100 transition-opacity"
-                          style={{ color: copiedId === msg.id ? '#16a34a' : '#9A8E84' }}
-                        >
-                          {copiedId === msg.id ? <><IconCheck /> Copied</> : <><IconCopy /> Copy</>}
-                        </button>
+                    /* ── AI response (flat prose, no card) ── */
+                    <div key={msg.id} className="group flex gap-4 items-start">
+                      {/* Avatar */}
+                      <div
+                        className="w-7 h-7 shrink-0 rounded-lg flex items-center justify-center mt-0.5"
+                        style={{ backgroundColor: '#1E2E4F' }}
+                      >
+                        <span className="text-[9px] font-bold font-mono" style={{ color: '#EEE9DF' }}>LS</span>
                       </div>
 
-                      {/* Response text */}
-                      <div className="text-[14px] leading-[1.9] whitespace-pre-wrap break-words" style={{ color: '#1A1A2E' }}>
-                        {msg.content ? msg.content : <ThinkingIndicator />}
-                      </div>
+                      {/* Content */}
+                      <div className="flex-1 min-w-0 space-y-3 pt-0.5">
 
-                      {/* Source chips */}
-                      {(messageSources[msg.id]?.length ?? 0) > 0 && (
-                        <div className="flex flex-wrap items-center gap-2 pt-1">
-                          <span className="text-[10px] font-medium" style={{ color: '#9A8E84' }}>Referenced:</span>
-                          {[...new Map(messageSources[msg.id].map(s => [s.documentId, s])).values()].map(s => (
-                            <span
-                              key={s.documentId}
-                              className="inline-flex items-center gap-1.5 px-3 py-1 text-[11px] font-medium rounded-full"
-                              style={{ backgroundColor: '#E8ECF4', color: '#1E2E4F', border: '1px solid #C8D4E8' }}
-                            >
-                              <IconDoc />{s.documentTitle}
-                            </span>
-                          ))}
+                        {/* Sender label + copy */}
+                        <div className="flex items-center justify-between">
+                          <span className="text-[11px] font-semibold font-display" style={{ color: '#1E2E4F' }}>LegalSathi</span>
+                          <button
+                            onClick={() => copyMessage(msg.id, msg.content)}
+                            className="flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-medium opacity-0 group-hover:opacity-100 transition-opacity"
+                            style={{ color: copiedId === msg.id ? '#16a34a' : '#9A8E84' }}
+                          >
+                            {copiedId === msg.id ? <><IconCheck /> Copied</> : <><IconCopy /> Copy</>}
+                          </button>
                         </div>
-                      )}
 
-                      {/* Follow-up suggestions */}
-                      {(messageSuggestions[msg.id]?.length ?? 0) > 0 && (
-                        <div className="space-y-2 pt-1">
-                          <div className="flex items-center gap-1.5 text-[10px] font-semibold tracking-wide" style={{ color: '#9A8E84' }}>
-                            <IconLightning />
-                            <span>FOLLOW-UP</span>
-                          </div>
-                          <div className="flex flex-wrap gap-2">
-                            {messageSuggestions[msg.id].map((q, i) => (
-                              <button
-                                key={i}
-                                onClick={() => sendMessage(q)}
-                                className="text-[12px] px-3.5 py-1.5 rounded-full border transition-all cursor-pointer"
-                                style={{ borderColor: '#C8BEB4', color: '#5C5349', backgroundColor: 'transparent' }}
-                                onMouseEnter={e => {
-                                  const el = e.currentTarget as HTMLButtonElement
-                                  el.style.backgroundColor = '#1E2E4F'
-                                  el.style.color = '#EEE9DF'
-                                  el.style.borderColor = '#1E2E4F'
-                                }}
-                                onMouseLeave={e => {
-                                  const el = e.currentTarget as HTMLButtonElement
-                                  el.style.backgroundColor = 'transparent'
-                                  el.style.color = '#5C5349'
-                                  el.style.borderColor = '#C8BEB4'
-                                }}
+                        {/* Response text */}
+                        <div>
+                          {(() => {
+                            // Failed — show error with reason
+                            if (failedMsgs[msg.id]) {
+                              return (
+                                <div
+                                  className="flex items-start gap-2.5 px-3.5 py-3 rounded-lg border-l-[3px] text-[12.5px]"
+                                  style={{ borderColor: '#EF4444', backgroundColor: '#FEF2F2', color: '#7F1D1D' }}
+                                >
+                                  <svg width="15" height="15" viewBox="0 0 16 16" fill="none" className="shrink-0 mt-0.5">
+                                    <circle cx="8" cy="8" r="7" stroke="#EF4444" strokeWidth="1.5"/>
+                                    <path d="M8 5v4M8 11v.5" stroke="#EF4444" strokeWidth="1.5" strokeLinecap="round"/>
+                                  </svg>
+                                  <div>
+                                    <span className="font-semibold">Failed to respond — </span>
+                                    {failedMsgs[msg.id]}
+                                  </div>
+                                </div>
+                              )
+                            }
+                            // Scenario arrived via SSE (current session)
+                            if (messageScenarios[msg.id]) {
+                              return <ScenarioRenderer data={messageScenarios[msg.id]} />
+                            }
+                            // This message is actively streaming — hide raw JSON build-up
+                            if (streamingMsgId === msg.id) {
+                              return <ThinkingIndicator />
+                            }
+                            // Empty with no error = still waiting for first token
+                            if (!msg.content) {
+                              return <ThinkingIndicator />
+                            }
+                            // Try to parse as scenario JSON (handles historical messages after reload).
+                            // Use regex to extract just the JSON object — the AI appends a Disclaimer
+                            // and [TRIGGER] code after the closing }, which breaks a naive JSON.parse.
+                            const jsonExtract = msg.content.match(/\{[\s\S]*\}/)
+                            if (jsonExtract) {
+                              try {
+                                const parsed = JSON.parse(jsonExtract[0])
+                                if (parsed?.sections) return <ScenarioRenderer data={parsed} />
+                              } catch { /* fall through */ }
+                            }
+                            return <LegalResponse content={msg.content} />
+                          })()}
+                        </div>
+
+                        {/* Source chips */}
+                        {(messageSources[msg.id]?.length ?? 0) > 0 && (
+                          <div className="flex flex-wrap items-center gap-2 pt-1">
+                            <span className="text-[10px] font-medium" style={{ color: '#9A8E84' }}>Referenced:</span>
+                            {[...new Map(messageSources[msg.id].map(s => [s.documentId, s])).values()].map(s => (
+                              <span
+                                key={s.documentId}
+                                className="inline-flex items-center gap-1.5 px-3 py-1 text-[11px] font-medium rounded-full"
+                                style={{ backgroundColor: '#E8ECF4', color: '#1E2E4F', border: '1px solid #C8D4E8' }}
                               >
-                                {q}
-                              </button>
+                                <IconDoc />{s.documentTitle}
+                              </span>
                             ))}
                           </div>
-                        </div>
-                      )}
-                    </div>
-                  </div>
+                        )}
 
-                ))}
+                        {/* Follow-up suggestions */}
+                        {(messageSuggestions[msg.id]?.length ?? 0) > 0 && (
+                          <div className="space-y-2 pt-1">
+                            <div className="flex items-center gap-1.5 text-[10px] font-semibold tracking-wide" style={{ color: '#9A8E84' }}>
+                              <IconLightning />
+                              <span>FOLLOW-UP</span>
+                            </div>
+                            <div className="flex flex-wrap gap-2">
+                              {messageSuggestions[msg.id].map((q, i) => (
+                                <button
+                                  key={i}
+                                  onClick={() => sendMessage(q)}
+                                  className="text-[12px] px-3.5 py-1.5 rounded-full border border-app-border-strong text-app-text-muted bg-transparent hover:bg-app-accent hover:text-[#EEE9DF] hover:border-app-accent transition-colors duration-150 cursor-pointer"
+                                >
+                                  {q}
+                                </button>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+
+                  ))
+                )}
                 <div ref={bottomRef} />
               </div>
             </div>
@@ -576,19 +795,19 @@ export default function ChatPage() {
                     onKeyDown={onKey}
                     onFocus={() => setInputFocused(true)}
                     onBlur={() => setInputFocused(false)}
-                    disabled={streaming}
+                    disabled={streaming || sending}
                     className="w-full bg-transparent resize-none outline-none text-[13px] py-4 px-4 leading-relaxed text-app-text placeholder:text-app-text-subtle disabled:cursor-not-allowed"
                   />
                   <div className="flex items-center justify-between px-4 py-2.5 border-t border-app-border">
                     <span className="text-[11px] text-app-text-subtle">
-                      {streaming
+                      {streaming || sending
                         ? <span className="flex items-center gap-2"><ThinkingIndicator /><span>Generating response…</span></span>
                         : 'Shift+Enter for new line'
                       }
                     </span>
                     <button
                       onClick={() => sendMessage()}
-                      disabled={streaming || !input.trim()}
+                      disabled={streaming || sending || !input.trim()}
                       className="flex items-center gap-1.5 px-4 py-1.5 rounded-sm text-[12px] font-medium transition-all disabled:opacity-40 cursor-pointer disabled:cursor-not-allowed"
                       style={{ backgroundColor: '#1E2E4F', color: '#EEE9DF' }}
                     >
@@ -605,63 +824,91 @@ export default function ChatPage() {
 
         ) : (
 
-          /* ─── Hero / Empty State ─── */
-          <div className="flex-1 flex flex-col items-center justify-center p-8">
-            <div className="w-full max-w-[560px] space-y-10">
+          /* ─── Hero / Domain Selection ─── */
+          <div className="flex-1 flex flex-col items-center justify-center p-8 overflow-y-auto scroll-area">
+            <div className="w-full max-w-[640px] space-y-8">
 
               {/* Identity */}
               <div className="text-center space-y-3">
-                <div className="w-12 h-12 rounded-sm flex items-center justify-center mx-auto mb-5" style={{ backgroundColor: '#1E2E4F' }}>
+                <div className="w-12 h-12 rounded-sm flex items-center justify-center mx-auto mb-4" style={{ backgroundColor: '#1E2E4F' }}>
                   <span className="text-[13px] font-bold font-mono" style={{ color: '#EEE9DF' }}>LS</span>
                 </div>
-                <h1 className="text-[32px] font-bold text-app-text font-display leading-tight">
+                <h1 className="text-[30px] font-bold text-app-text font-display leading-tight">
                   LegalSathi AI
                 </h1>
-                <p className="text-[14px] text-app-text-muted max-w-sm mx-auto">
-                  AI-powered legal assistant for Nepal. Ask questions, research law, understand your rights.
-                </p>
+                {!selectedDomain ? (
+                  <p className="text-[14px] text-app-text-muted max-w-sm mx-auto">
+                    Select a legal domain to begin. Your session will be strictly locked to that topic.
+                  </p>
+                ) : (
+                  <p className="text-[13px] text-app-text-muted max-w-sm mx-auto">
+                    Session locked to&nbsp;
+                    <span className="font-semibold text-app-text">
+                      {activeDomainConfig?.icon} {activeDomainConfig?.label}
+                    </span>
+                    &nbsp;·&nbsp;
+                    <button
+                      onClick={() => setSelectedDomain(null)}
+                      className="underline underline-offset-2 hover:text-app-text transition-colors cursor-pointer"
+                    >
+                      change domain
+                    </button>
+                  </p>
+                )}
               </div>
 
-              {/* Input */}
-              <div className={`border bg-app-surface rounded-sm transition-colors ${
-                inputFocused ? 'border-app-border-strong shadow-sm' : 'border-app-border'
-              }`}>
-                <textarea
-                  ref={heroTextarea}
-                  value={input}
-                  rows={3}
-                  placeholder="Describe your legal question or situation…"
-                  onChange={(e) => { setInput(e.target.value); grow(e.target) }}
-                  onKeyDown={onKey}
-                  onFocus={() => setInputFocused(true)}
-                  onBlur={() => setInputFocused(false)}
-                  className="w-full bg-transparent resize-none outline-none text-[14px] p-5 leading-relaxed text-app-text placeholder:text-app-text-subtle"
-                />
-                <div className="flex justify-between items-center px-5 py-3 border-t border-app-border">
-                  <span className="text-[11px] text-app-text-subtle">Enter to send · Shift+Enter for new line</span>
-                  <button
-                    onClick={() => sendMessage()}
-                    disabled={streaming || !input.trim()}
-                    className="flex items-center gap-2 px-4 py-1.5 rounded-sm text-[12px] font-medium transition-all disabled:opacity-40"
-                    style={{ backgroundColor: '#1E2E4F', color: '#EEE9DF' }}
-                  >
-                    <IconSend /> Send
-                  </button>
+              {!selectedDomain ? (
+                /* ── Domain card grid ── */
+                <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+                  {DOMAINS.map((domain) => (
+                    <button
+                      key={domain.slug}
+                      onClick={() => {
+                        setSelectedDomain(domain.slug)
+                        setTimeout(() => heroTextarea.current?.focus(), 60)
+                      }}
+                      className="text-left px-5 py-4 border border-app-border bg-app-surface hover:border-[#1E2E4F] hover:bg-app-surface-hover rounded-sm transition-all cursor-pointer group"
+                    >
+                      <div className="text-[22px] mb-2">{domain.icon}</div>
+                      <div className="text-[13px] font-semibold text-app-text group-hover:text-[#1E2E4F] font-display mb-1">
+                        {domain.label}
+                      </div>
+                      <div className="text-[11.5px] text-app-text-subtle leading-relaxed">
+                        {domain.description}
+                      </div>
+                    </button>
+                  ))}
                 </div>
-              </div>
-
-              {/* Suggestions */}
-              <div className="grid grid-cols-3 gap-3">
-                {SUGGESTIONS.map((s) => (
-                  <button
-                    key={s}
-                    onClick={() => { setInput(s); heroTextarea.current?.focus() }}
-                    className="text-left px-4 py-3 border border-app-border bg-app-surface hover:border-app-border-strong hover:bg-app-surface-hover rounded-sm text-[12px] text-app-text-muted hover:text-app-text transition-all cursor-pointer"
-                  >
-                    {s}
-                  </button>
-                ))}
-              </div>
+              ) : (
+                /* ── Chat input (domain selected) ── */
+                <div className={`border bg-app-surface rounded-sm transition-colors ${
+                  inputFocused ? 'border-app-border-strong shadow-sm' : 'border-app-border'
+                }`}>
+                  <textarea
+                    ref={heroTextarea}
+                    value={input}
+                    rows={3}
+                    placeholder={`Ask a ${activeDomainConfig?.label ?? 'legal'} question…`}
+                    onChange={(e) => { setInput(e.target.value); grow(e.target) }}
+                    onKeyDown={onKey}
+                    onFocus={() => setInputFocused(true)}
+                    onBlur={() => setInputFocused(false)}
+                    disabled={streaming || sending}
+                    className="w-full bg-transparent resize-none outline-none text-[14px] p-5 leading-relaxed text-app-text placeholder:text-app-text-subtle disabled:cursor-not-allowed"
+                  />
+                  <div className="flex justify-between items-center px-5 py-3 border-t border-app-border">
+                    <span className="text-[11px] text-app-text-subtle">Enter to send · Shift+Enter for new line</span>
+                    <button
+                      onClick={() => sendMessage()}
+                      disabled={streaming || sending || !input.trim()}
+                      className="flex items-center gap-2 px-4 py-1.5 rounded-sm text-[12px] font-medium transition-all disabled:opacity-40 disabled:cursor-not-allowed"
+                      style={{ backgroundColor: '#1E2E4F', color: '#EEE9DF' }}
+                    >
+                      <IconSend /> Send
+                    </button>
+                  </div>
+                </div>
+              )}
 
               <p className="text-center text-[11px] text-app-text-subtle pt-2 border-t border-app-border">
                 © 2026 LegalSathi · AI guidance only — always consult a qualified lawyer

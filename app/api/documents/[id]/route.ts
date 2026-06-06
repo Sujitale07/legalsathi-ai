@@ -14,6 +14,16 @@ export async function GET(
       status: true,
       createdAt: true,
       _count: { select: { chunks: true } },
+      chunks: {
+        select: {
+          id: true,
+          content: true,
+          chunkIndex: true,
+          totalChunks: true,
+          createdAt: true,
+        },
+        orderBy: { chunkIndex: 'asc' },
+      },
     },
   })
   if (!doc) return Response.json({ error: 'Not found' }, { status: 404 })
@@ -25,6 +35,6 @@ export async function DELETE(
   { params }: { params: Promise<{ id: string }> }
 ) {
   const { id } = await params
-  await prisma.document.delete({ where: { id } })
+  await prisma.document.deleteMany({ where: { id } })
   return new Response(null, { status: 204 })
 }
