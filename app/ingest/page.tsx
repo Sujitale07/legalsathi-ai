@@ -2,12 +2,14 @@
 
 import { useState, useEffect, useRef, useCallback } from 'react'
 import Link from 'next/link'
+import { DOMAINS } from '@/lib/domains'
 
 type Document = {
   id: string
   title: string
   status: string
   fileType: string
+  domain: string
   createdAt: string
   _count: { chunks: number }
 }
@@ -113,11 +115,13 @@ export default function IngestPage() {
   // Manual Paste Form
   const [pasteTitle, setPasteTitle] = useState('')
   const [pasteContent, setPasteContent] = useState('')
+  const [pasteDomain, setPasteDomain] = useState('general')
   const [pasting, setPasting] = useState(false)
 
   // File Upload Queue
   const [queue, setQueue] = useState<QueueItem[]>([])
   const [isDragOver, setIsDragOver] = useState(false)
+  const [uploadDomain, setUploadDomain] = useState('general')
   const fileInputRef = useRef<HTMLInputElement>(null)
 
   // Detail Drawer
@@ -268,7 +272,8 @@ export default function IngestPage() {
         body: JSON.stringify({
           title: pasteTitle.trim(),
           content: pasteContent.trim(),
-          fileType: 'manual'
+          fileType: 'manual',
+          domain: pasteDomain,
         })
       })
 
@@ -280,6 +285,7 @@ export default function IngestPage() {
             title: newDoc.title,
             status: 'processing',
             fileType: 'manual',
+            domain: pasteDomain,
             createdAt: new Date().toISOString(),
             _count: { chunks: 0 }
           },
@@ -389,7 +395,8 @@ export default function IngestPage() {
             body: JSON.stringify({
               title: item.name,
               content: item.content,
-              fileType: item.type
+              fileType: item.type,
+              domain: uploadDomain,
             })
           })
 
@@ -401,6 +408,7 @@ export default function IngestPage() {
                 title: newDoc.title,
                 status: 'processing',
                 fileType: item.type,
+                domain: uploadDomain,
                 createdAt: new Date().toISOString(),
                 _count: { chunks: 0 }
               },
@@ -543,6 +551,29 @@ export default function IngestPage() {
             {/* Tab: Upload */}
             {activeTab === 'upload' && (
               <div className="p-6 space-y-6">
+                {/* Domain selector */}
+                <div className="space-y-1.5">
+                  <label className="text-[10.5px] font-bold uppercase tracking-widest text-app-text-subtle">Legal Domain Namespace</label>
+                  <div className="grid grid-cols-3 gap-2 sm:grid-cols-6">
+                    {DOMAINS.map((d) => (
+                      <button
+                        key={d.slug}
+                        type="button"
+                        onClick={() => setUploadDomain(d.slug)}
+                        className={`px-3 py-2 rounded-sm text-[11px] font-medium border transition-all cursor-pointer text-center ${
+                          uploadDomain === d.slug
+                            ? 'border-[#1E2E4F] bg-[#1E2E4F] text-[#EEE9DF]'
+                            : 'border-app-border bg-[#FDFCFB] text-app-text-muted hover:border-app-border-strong hover:text-app-text'
+                        }`}
+                      >
+                        <span className="text-[14px] block mb-0.5">{d.icon}</span>
+                        <span>{d.label}</span>
+                      </button>
+                    ))}
+                  </div>
+                  <p className="text-[10px] text-app-text-subtle">All files in this upload batch will be indexed into the selected namespace.</p>
+                </div>
+
                 <div
                   onDragOver={(e) => { e.preventDefault(); setIsDragOver(true) }}
                   onDragLeave={() => setIsDragOver(false)}
@@ -636,6 +667,27 @@ export default function IngestPage() {
             {/* Tab: Paste Plain Text */}
             {activeTab === 'paste' && (
               <form onSubmit={handlePasteSubmit} className="p-6 space-y-4">
+                {/* Domain selector */}
+                <div className="space-y-1.5">
+                  <label className="text-[10.5px] font-bold uppercase tracking-widest text-app-text-subtle">Legal Domain Namespace</label>
+                  <div className="grid grid-cols-3 gap-2 sm:grid-cols-7">
+                    {DOMAINS.map((d) => (
+                      <button
+                        key={d.slug}
+                        type="button"
+                        onClick={() => setPasteDomain(d.slug)}
+                        className={`px-3 py-2 rounded-sm text-[11px] font-medium border transition-all cursor-pointer text-center ${
+                          pasteDomain === d.slug
+                            ? 'border-[#1E2E4F] bg-[#1E2E4F] text-[#EEE9DF]'
+                            : 'border-app-border bg-[#FDFCFB] text-app-text-muted hover:border-app-border-strong hover:text-app-text'
+                        }`}
+                      >
+                        <span className="text-[14px] block mb-0.5">{d.icon}</span>
+                        <span>{d.label}</span>
+                      </button>
+                    ))}
+                  </div>
+                </div>
                 <div className="space-y-1">
                   <label className="text-[10.5px] font-bold uppercase tracking-widest text-app-text-subtle">Document Title</label>
                   <input
@@ -738,6 +790,7 @@ export default function IngestPage() {
                     <thead>
                       <tr className="bg-[#F5F1EB] border-b border-app-border text-app-text-muted uppercase text-[9.5px] font-bold tracking-wider">
                         <th className="py-3 px-5">Document Title</th>
+                        <th className="py-3 px-4 w-28">Domain</th>
                         <th className="py-3 px-4 w-24">Type</th>
                         <th className="py-3 px-4 w-32">Status</th>
                         <th className="py-3 px-4 w-24 text-center">Chunks</th>
@@ -746,13 +799,24 @@ export default function IngestPage() {
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-app-border bg-[#FDFCFB]">
-                      {filteredDocuments.map((doc) => (
+                      {filteredDocuments.map((doc) => {
+                        const domainConfig = DOMAINS.find(d => d.slug === doc.domain)
+                        return (
                         <tr
                           key={doc.id}
                           onClick={() => handleDocClick(doc)}
                           className="hover:bg-app-surface transition-all cursor-pointer group"
                         >
                           <td className="py-3.5 px-5 font-medium text-app-text truncate max-w-xs">{doc.title}</td>
+                          <td className="py-3.5 px-4">
+                            {domainConfig ? (
+                              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-medium" style={{ backgroundColor: '#E8ECF4', color: '#1E2E4F' }}>
+                                {domainConfig.icon} {domainConfig.label}
+                              </span>
+                            ) : (
+                              <span className="text-[10px] text-app-text-subtle font-mono">general</span>
+                            )}
+                          </td>
                           <td className="py-3.5 px-4 font-mono text-[10px] uppercase font-bold text-app-text-subtle">{doc.fileType || 'text'}</td>
                           <td className="py-3.5 px-4">
                             {doc.status === 'ready' && (
@@ -790,7 +854,8 @@ export default function IngestPage() {
                             </button>
                           </td>
                         </tr>
-                      ))}
+                        )
+                      })}
                     </tbody>
                   </table>
                 </div>

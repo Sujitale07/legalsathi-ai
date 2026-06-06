@@ -7,7 +7,7 @@ const ai = new GoogleGenAI({
   apiKey: (process.env.GEMINI_API_KEY ?? process.env.GOOGLE_API_KEY)!,
 })
 
-const CHAT_MODEL  = 'gemini-2.5-flash'
+const CHAT_MODEL  = process.env.GEMINI_MODEL ?? 'gemini-2.5-flash'
 const MAX_HISTORY = 10
 
 function toGeminiHistory(messages: { role: string; content: string }[]) {
@@ -44,13 +44,15 @@ export async function POST(request: NextRequest) {
 
   const needsTitle = conversation.title === 'New Chat' || conversation.title === 'New chat'
 
+  const domain = conversation.domain ?? 'general'
+
   let system: string, sources: ReturnType<typeof buildSystemPrompt>['sources']
   try {
-    const chunks = await retrieveRelevantChunks(message)
-    ;({ system, sources } = buildSystemPrompt(chunks))
+    const chunks = await retrieveRelevantChunks(message, domain)
+    ;({ system, sources } = buildSystemPrompt(chunks, domain))
   } catch (err) {
     console.error('RAG retrieval failed:', err)
-    ;({ system, sources } = buildSystemPrompt([]))
+    ;({ system, sources } = buildSystemPrompt([], domain))
   }
 
   const history = toGeminiHistory(conversation.messages.slice(-MAX_HISTORY))
@@ -66,7 +68,7 @@ export async function POST(request: NextRequest) {
         const stream = await ai.models.generateContentStream({
           model: CHAT_MODEL,
           contents: [...history, { role: 'user', parts: [{ text: message }] }],
-          config: { systemInstruction: system, maxOutputTokens: 8192 },
+          config: { systemInstruction: system, maxOutputTokens: 8192, temperature: 0 },
         })
 
         for await (const chunk of stream) {
@@ -181,7 +183,9 @@ export async function POST(request: NextRequest) {
   return new Response(readable, {
     headers: {
       'Content-Type': 'text/event-stream',
-      'Cache-Control': 'no-cache',
+      'Cache-Control': 'no-cache, no-store, must-revalidate',
+      Pragma: 'no-cache',
+      Expires: '0',
       Connection: 'keep-alive',
     },
   })

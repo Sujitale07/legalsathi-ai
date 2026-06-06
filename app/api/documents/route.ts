@@ -18,7 +18,7 @@ export async function GET() {
 }
 
 export async function POST(request: NextRequest) {
-  const { title, content, fileType } = await request.json()
+  const { title, content, fileType, domain } = await request.json()
 
   if (!title?.trim() || !content?.trim()) {
     return Response.json({ error: 'title and content are required' }, { status: 400 })
@@ -26,10 +26,11 @@ export async function POST(request: NextRequest) {
 
   // Create document immediately so the UI can show it as "processing"
   const document = await prisma.document.create({
-    data: { 
-      title: title.trim(), 
+    data: {
+      title: title.trim(),
       status: 'processing',
-      fileType: typeof fileType === 'string' ? fileType.trim() : 'text'
+      fileType: typeof fileType === 'string' ? fileType.trim() : 'text',
+      domain: typeof domain === 'string' && domain.trim() ? domain.trim() : 'general',
     },
   })
 

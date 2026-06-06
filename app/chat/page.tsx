@@ -4,17 +4,12 @@ import { useState, useEffect, useRef, useCallback } from 'react'
 import Link from 'next/link'
 import LegalResponse from '@/components/LegalResponse'
 import ScenarioRenderer from '@/components/ScenarioRenderer'
+import { DOMAINS } from '@/lib/domains'
 
 type Message    = { id: string; role: string; content: string; createdAt: string }
-type Conversation = { id: string; title: string; updatedAt: string }
+type Conversation = { id: string; title: string; domain: string; updatedAt: string }
 type Document   = { id: string; title: string; status: string; _count: { chunks: number } }
 type Source     = { documentId: string; documentTitle: string; chunkIndex: number; totalChunks: number }
-
-const SUGGESTIONS = [
-  'Tenant rights in Nepal',
-  'Employment contract clauses',
-  'Civil case filing steps',
-]
 
 // ─── Functional Icons ─────────────────────────────────────────────────────────
 
@@ -173,6 +168,7 @@ export default function ChatPage() {
   const [messageScenarios, setMessageScenarios] = useState<Record<string, any>>({})
   const [copiedId, setCopiedId] = useState<string | null>(null)
   const [deletingIds, setDeletingIds] = useState<Set<string>>(new Set())
+  const [selectedDomain, setSelectedDomain] = useState<string | null>(null)
 
   const bottomRef = useRef<HTMLDivElement>(null)
   const scrollContainerRef = useRef<HTMLDivElement>(null)
@@ -186,7 +182,9 @@ export default function ChatPage() {
   const documentsRef = useRef<Document[]>([])
   useEffect(() => { documentsRef.current = documents })
 
-  const activeTitle = conversations.find(c => c.id === activeId)?.title ?? 'New Chat'
+  const activeConv = conversations.find(c => c.id === activeId)
+  const activeTitle = activeConv?.title ?? 'New Chat'
+  const activeDomainConfig = DOMAINS.find(d => d.slug === (activeConv?.domain ?? selectedDomain ?? 'general'))
 
   // ── Data ──────────────────────────────────────────────────────────────────
 
@@ -259,21 +257,12 @@ export default function ChatPage() {
     }
   }, [])
 
-  const newConversation = useCallback(async () => {
-    setLoadingConversation(true)
-    try {
-      const res = await fetch('/api/conversations', { method: 'POST' })
-      const conv = await res.json()
-      setConversations((p) => [conv, ...p])
-      setActiveId(conv.id)
-      setMessages([])
-      shouldScrollSmoothRef.current = false
-      setTimeout(() => activeTextarea.current?.focus(), 60)
-    } catch (err) {
-      console.error(err)
-    } finally {
-      setLoadingConversation(false)
-    }
+  const newConversation = useCallback(() => {
+    setActiveId(null)
+    setMessages([])
+    setSelectedDomain(null)
+    shouldScrollSmoothRef.current = false
+    setTimeout(() => heroTextarea.current?.focus(), 60)
   }, [])
 
   const deleteConversation = useCallback(async (id: string, e: React.MouseEvent) => {
@@ -297,7 +286,11 @@ export default function ChatPage() {
     try {
       let convId = activeId
       if (!convId) {
-        const res = await fetch('/api/conversations', { method: 'POST' })
+        const res = await fetch('/api/conversations', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ domain: selectedDomain ?? 'general' }),
+        })
         if (!res.ok) throw new Error('Failed to create conversation')
         const conv = await res.json()
         // Provisional title from the user's message — AI-generated title replaces it after stream
@@ -377,7 +370,7 @@ export default function ChatPage() {
       loadConversations()
       setTimeout(() => loadConversations(), 3500)
     }
-  }, [input, activeId, streaming, loadConversations])
+  }, [input, activeId, streaming, selectedDomain, loadConversations])
 
   useEffect(() => {
     const container = scrollContainerRef.current
@@ -613,9 +606,21 @@ export default function ChatPage() {
           <>
             {/* Header */}
             <header className="h-14 shrink-0 flex items-center justify-between px-8 border-b border-app-border bg-app-surface">
-              <h2 className="text-[17px] font-semibold text-app-text truncate max-w-md font-display">
-                {activeTitle}
-              </h2>
+              <div className="flex items-center gap-3 min-w-0">
+                <h2 className="text-[17px] font-semibold text-app-text truncate max-w-xs font-display">
+                  {activeTitle}
+                </h2>
+                {activeDomainConfig && (
+                  <span
+                    className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[10.5px] font-semibold shrink-0"
+                    style={{ backgroundColor: '#E8ECF4', color: '#1E2E4F', border: '1px solid #C8D4E8' }}
+                  >
+                    <span>{activeDomainConfig.icon}</span>
+                    <span>{activeDomainConfig.label}</span>
+                    <span style={{ color: '#9A8E84', marginLeft: 2 }}>· locked</span>
+                  </span>
+                )}
+              </div>
               <div className="flex items-center gap-2 text-[11px] text-app-text-subtle">
                 <div className={`w-1.5 h-1.5 rounded-full ${streaming || sending ? 'bg-amber-400' : 'bg-emerald-500'}`} />
                 <span>{streaming || sending ? 'Responding…' : 'Ready'}</span>
@@ -819,65 +824,91 @@ export default function ChatPage() {
 
         ) : (
 
-          /* ─── Hero / Empty State ─── */
-          <div className="flex-1 flex flex-col items-center justify-center p-8">
-            <div className="w-full max-w-[560px] space-y-10">
+          /* ─── Hero / Domain Selection ─── */
+          <div className="flex-1 flex flex-col items-center justify-center p-8 overflow-y-auto scroll-area">
+            <div className="w-full max-w-[640px] space-y-8">
 
               {/* Identity */}
               <div className="text-center space-y-3">
-                <div className="w-12 h-12 rounded-sm flex items-center justify-center mx-auto mb-5" style={{ backgroundColor: '#1E2E4F' }}>
+                <div className="w-12 h-12 rounded-sm flex items-center justify-center mx-auto mb-4" style={{ backgroundColor: '#1E2E4F' }}>
                   <span className="text-[13px] font-bold font-mono" style={{ color: '#EEE9DF' }}>LS</span>
                 </div>
-                <h1 className="text-[32px] font-bold text-app-text font-display leading-tight">
+                <h1 className="text-[30px] font-bold text-app-text font-display leading-tight">
                   LegalSathi AI
                 </h1>
-                <p className="text-[14px] text-app-text-muted max-w-sm mx-auto">
-                  AI-powered legal assistant for Nepal. Ask questions, research law, understand your rights.
-                </p>
+                {!selectedDomain ? (
+                  <p className="text-[14px] text-app-text-muted max-w-sm mx-auto">
+                    Select a legal domain to begin. Your session will be strictly locked to that topic.
+                  </p>
+                ) : (
+                  <p className="text-[13px] text-app-text-muted max-w-sm mx-auto">
+                    Session locked to&nbsp;
+                    <span className="font-semibold text-app-text">
+                      {activeDomainConfig?.icon} {activeDomainConfig?.label}
+                    </span>
+                    &nbsp;·&nbsp;
+                    <button
+                      onClick={() => setSelectedDomain(null)}
+                      className="underline underline-offset-2 hover:text-app-text transition-colors cursor-pointer"
+                    >
+                      change domain
+                    </button>
+                  </p>
+                )}
               </div>
 
-              {/* Input */}
-              <div className={`border bg-app-surface rounded-sm transition-colors ${
-                inputFocused ? 'border-app-border-strong shadow-sm' : 'border-app-border'
-              }`}>
-                <textarea
-                  ref={heroTextarea}
-                  value={input}
-                  rows={3}
-                  placeholder="Describe your legal question or situation…"
-                  onChange={(e) => { setInput(e.target.value); grow(e.target) }}
-                  onKeyDown={onKey}
-                  onFocus={() => setInputFocused(true)}
-                  onBlur={() => setInputFocused(false)}
-                  disabled={streaming || sending}
-                  className="w-full bg-transparent resize-none outline-none text-[14px] p-5 leading-relaxed text-app-text placeholder:text-app-text-subtle disabled:cursor-not-allowed"
-                />
-                <div className="flex justify-between items-center px-5 py-3 border-t border-app-border">
-                  <span className="text-[11px] text-app-text-subtle">Enter to send · Shift+Enter for new line</span>
-                  <button
-                    onClick={() => sendMessage()}
-                    disabled={streaming || sending || !input.trim()}
-                    className="flex items-center gap-2 px-4 py-1.5 rounded-sm text-[12px] font-medium transition-all disabled:opacity-40 disabled:cursor-not-allowed"
-                    style={{ backgroundColor: '#1E2E4F', color: '#EEE9DF' }}
-                  >
-                    <IconSend /> Send
-                  </button>
+              {!selectedDomain ? (
+                /* ── Domain card grid ── */
+                <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+                  {DOMAINS.map((domain) => (
+                    <button
+                      key={domain.slug}
+                      onClick={() => {
+                        setSelectedDomain(domain.slug)
+                        setTimeout(() => heroTextarea.current?.focus(), 60)
+                      }}
+                      className="text-left px-5 py-4 border border-app-border bg-app-surface hover:border-[#1E2E4F] hover:bg-app-surface-hover rounded-sm transition-all cursor-pointer group"
+                    >
+                      <div className="text-[22px] mb-2">{domain.icon}</div>
+                      <div className="text-[13px] font-semibold text-app-text group-hover:text-[#1E2E4F] font-display mb-1">
+                        {domain.label}
+                      </div>
+                      <div className="text-[11.5px] text-app-text-subtle leading-relaxed">
+                        {domain.description}
+                      </div>
+                    </button>
+                  ))}
                 </div>
-              </div>
-
-              {/* Suggestions */}
-              <div className="grid grid-cols-3 gap-3">
-                {SUGGESTIONS.map((s) => (
-                  <button
-                    key={s}
-                    onClick={() => { setInput(s); heroTextarea.current?.focus() }}
+              ) : (
+                /* ── Chat input (domain selected) ── */
+                <div className={`border bg-app-surface rounded-sm transition-colors ${
+                  inputFocused ? 'border-app-border-strong shadow-sm' : 'border-app-border'
+                }`}>
+                  <textarea
+                    ref={heroTextarea}
+                    value={input}
+                    rows={3}
+                    placeholder={`Ask a ${activeDomainConfig?.label ?? 'legal'} question…`}
+                    onChange={(e) => { setInput(e.target.value); grow(e.target) }}
+                    onKeyDown={onKey}
+                    onFocus={() => setInputFocused(true)}
+                    onBlur={() => setInputFocused(false)}
                     disabled={streaming || sending}
-                    className="text-left px-4 py-3 border border-app-border bg-app-surface hover:border-app-border-strong hover:bg-app-surface-hover rounded-sm text-[12px] text-app-text-muted hover:text-app-text transition-all cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
-                  >
-                    {s}
-                  </button>
-                ))}
-              </div>
+                    className="w-full bg-transparent resize-none outline-none text-[14px] p-5 leading-relaxed text-app-text placeholder:text-app-text-subtle disabled:cursor-not-allowed"
+                  />
+                  <div className="flex justify-between items-center px-5 py-3 border-t border-app-border">
+                    <span className="text-[11px] text-app-text-subtle">Enter to send · Shift+Enter for new line</span>
+                    <button
+                      onClick={() => sendMessage()}
+                      disabled={streaming || sending || !input.trim()}
+                      className="flex items-center gap-2 px-4 py-1.5 rounded-sm text-[12px] font-medium transition-all disabled:opacity-40 disabled:cursor-not-allowed"
+                      style={{ backgroundColor: '#1E2E4F', color: '#EEE9DF' }}
+                    >
+                      <IconSend /> Send
+                    </button>
+                  </div>
+                </div>
+              )}
 
               <p className="text-center text-[11px] text-app-text-subtle pt-2 border-t border-app-border">
                 © 2026 LegalSathi · AI guidance only — always consult a qualified lawyer

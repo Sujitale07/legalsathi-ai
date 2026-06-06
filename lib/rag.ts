@@ -1,5 +1,6 @@
 import { prisma } from './prisma'
 import { generateEmbedding } from './embeddings'
+import { getDomain } from './domains'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -22,18 +23,17 @@ export type Source = {
 
 // ─── Config ───────────────────────────────────────────────────────────────────
 
-const SIMILARITY_THRESHOLD  = 0.50   // discard chunks below this cosine similarity
-const MAX_CHUNKS            = 6      // max chunks to retrieve
-const MAX_CONTEXT_WORDS     = 2000   // hard cap on total words sent to Claude
-const DEDUP_SIMILARITY_GAP  = 0.02   // drop a chunk if a better one from same doc is within this gap
+const SIMILARITY_THRESHOLD  = 0.50
+const MAX_CHUNKS            = 6
+const MAX_CONTEXT_WORDS     = 2000
+const DEDUP_SIMILARITY_GAP  = 0.02
 
 // ─── Retrieval ────────────────────────────────────────────────────────────────
 
-export async function retrieveRelevantChunks(query: string): Promise<RetrievedChunk[]> {
+export async function retrieveRelevantChunks(query: string, domain: string): Promise<RetrievedChunk[]> {
   const queryEmbedding = await generateEmbedding(query)
   const vec            = `[${queryEmbedding.join(',')}]`
 
-  // Raw SQL: cosine similarity via pgvector <=> operator, join Document for title
   const rows = await prisma.$queryRaw<RetrievedChunk[]>`
     SELECT
       dc.id,
@@ -47,13 +47,14 @@ export async function retrieveRelevantChunks(query: string): Promise<RetrievedCh
     JOIN   "Document"      d  ON d.id = dc."documentId"
     WHERE  dc.embedding IS NOT NULL
       AND  d.status = 'ready'
+      AND  d.domain = ${domain}
       AND  1 - (dc.embedding <=> ${vec}::vector) >= ${SIMILARITY_THRESHOLD}
     ORDER  BY dc.embedding <=> ${vec}::vector
     LIMIT  ${MAX_CHUNKS * 2}
   `
 
   // ── Deduplicate: keep only the highest-scoring chunk per (documentId, close similarity) ──
-  const seen = new Map<string, number>()   // documentId -> best similarity so far
+  const seen = new Map<string, number>()
   const deduped: RetrievedChunk[] = []
 
   for (const row of rows) {
@@ -68,7 +69,7 @@ export async function retrieveRelevantChunks(query: string): Promise<RetrievedCh
     }
   }
 
-  // ── Context budget: drop chunks that would exceed MAX_CONTEXT_WORDS ──
+  // ── Context budget ──
   const budget: RetrievedChunk[] = []
   let totalWords = 0
 
@@ -89,6 +90,7 @@ const SCENARIO_SCHEMA = `{
   "title": "string",
   "user_intent": "string",
   "business_type": "small_business | tech | freelance | import_export | hospitality | real_estate | ngo | general",
+  "citations": ["[§1: Document Title]", "[§2: Document Title]"],
   "sections": [
     {
       "section_type": "flow | checklist | cards | table | map | text | warning | actions",
@@ -99,10 +101,10 @@ const SCENARIO_SCHEMA = `{
     }
   ],
   "map_entities": [
-    { 
-      "name": "string", 
-      "type": "municipality | tax_office | customs | government | legal_firm | other", 
-      "purpose": "string", 
+    {
+      "name": "string",
+      "type": "municipality | tax_office | customs | government | legal_firm | other",
+      "purpose": "string",
       "location_hint": "string",
       "image_url": "string (optional, valid Unsplash image URL matching the location type or Nepali buildings)"
     }
@@ -143,9 +145,11 @@ MAP ENTITIES:
 - Optional: populate "image_url" with a beautiful Unsplash photo URL relevant to the place or general Nepali buildings (e.g. "https://images.unsplash.com/photo-1544735716-392fe2489ffa?auto=format&fit=crop&w=400&q=80" or similar) if applicable.
 
 COSTS: Always NPR, always range format. Never hallucinate specific fee amounts — use reasonable ranges.
-LAWYERS: Only include if genuinely relevant to the question.`
+LAWYERS: Only include if genuinely relevant to the question.
 
-export function buildSystemPrompt(chunks: RetrievedChunk[]): { system: string; sources: Source[] } {
+CITATIONS: Populate the top-level "citations" array with references to the sources you used, formatted as "[§N: Document Title]" where N matches the source id in <retrieved_legal_context>. Only cite sources you actually used.`
+
+export function buildSystemPrompt(chunks: RetrievedChunk[], domain: string): { system: string; sources: Source[] } {
   const sources: Source[] = chunks.map((c) => ({
     documentId:    c.documentId,
     documentTitle: c.documentTitle,
@@ -153,15 +157,21 @@ export function buildSystemPrompt(chunks: RetrievedChunk[]): { system: string; s
     totalChunks:   c.totalChunks,
   }))
 
-  const contextBlock = chunks.length > 0
-    ? `\n\nKNOWLEDGE BASE CONTEXT (cite inline as [Source N] when used):\n${
-        chunks.map((c, i) =>
-          `[Source ${i + 1}] ${c.documentTitle} — chunk ${c.chunkIndex + 1} of ${c.totalChunks}\n${c.content}`
-        ).join('\n\n---\n\n')
-      }`
-    : ''
+  const domainConfig = getDomain(domain)
+  const domainInstructions = domainConfig?.systemInstructions ?? ''
 
-  const system = `You are "LegalSathi v1.0", a highly disciplined, automated Nepalese legal literacy assistant. Your purpose is to educate everyday citizens on civic procedures, traffic regulations, and basic employment rights within Nepal.
+  // Build the XML context block
+  const contextBlock = chunks.length > 0
+    ? `\n\n<retrieved_legal_context>\n${
+        chunks.map((c, i) =>
+          `  <source id="${i + 1}" document="${c.documentTitle}" chunk="${c.chunkIndex + 1} of ${c.totalChunks}" relevance="${c.similarity.toFixed(2)}">\n    <content>\n${c.content}\n    </content>\n  </source>`
+        ).join('\n')
+      }\n  <context_boundary>\n    HARD STOP: You have no legal knowledge beyond the source tags above. If the answer is absent from these sources, respond ONLY with the exact fallback phrase from your system instructions. Do NOT extrapolate.\n  </context_boundary>\n</retrieved_legal_context>`
+    : '\n\n<retrieved_legal_context>\n  <context_boundary>\n    No relevant documents were found in this domain\'s knowledge base for this query. You MUST respond with: "I cannot find a verified legal basis for this in my current context."\n  </context_boundary>\n</retrieved_legal_context>'
+
+  const system = `${domainInstructions}
+
+You are "LegalSathi v1.0", a highly disciplined, automated Nepalese legal literacy assistant. Your purpose is to educate everyday citizens on civic procedures, traffic regulations, and basic employment rights within Nepal.
 
 Choose your output mode dynamically based on the user's query:
 
@@ -179,6 +189,7 @@ Use this mode ONLY for simple greetings ("hi", "hello"), very short factual ques
 - Output a natural, helpful response in plain markdown.
 - Do NOT output JSON in this mode.
 - Append the Disclaimer and Trigger code at the very end.
+- For inline citations, append [§N] after the relevant sentence where N is the source id.
 
 [LAWYER REFERRAL SYSTEM]
 This platform has a live database of licensed Nepali advocates. When you populate the "required_lawyers" field in a JSON response, the system automatically queries the database and shows the user real matching lawyers with contact details.
@@ -210,11 +221,11 @@ MAPPING GUIDE (common queries → correct type):
   divorce/custody → "family_lawyer"
 
 [RAG OPERATIONAL ARCHITECTURE]
-You operate via a Retrieval-Augmented Generation (RAG) pipeline. Relevant legal facts, JSON fine structures, or Markdown contract guidelines are provided in the context below.
+You operate via a Retrieval-Augmented Generation (RAG) pipeline. Relevant legal facts are provided in the <retrieved_legal_context> tags above. You MUST restrict all answers to that context.
 
 [STRICT TRUTH & SEEDING RULES]
 1. You must strictly prioritize the facts, checklists, and fine amounts found within the retrieved context over your pre-trained baseline knowledge.
-2. If the user query asks for a specific checklist (e.g., Citizenship) or fine amount, parse the retrieved data and present it in a clean, user-friendly, structured format.
+2. If the user query asks for a specific checklist or fine amount, parse the retrieved data and present it in a clean, structured format.
 3. CRITICAL DATA UPDATE: If the retrieved context references the 2075/2023 labor rates for minimum wage, override it with the updated 2082 BS (2025/2026) mandated rate: Total Minimum Wage is strictly NPR 19,550/month (NPR 12,170 basic salary + NPR 7,380 dearness allowance).
 4. If the retrieved context does not contain enough information to answer a complex, niche legal question safely, state: "I cannot find the exact clause in our system database. To ensure legal safety, please consult a verified human attorney from our directory." Do not invent or hallucinate laws.
 

@@ -9,6 +9,7 @@ datasource db {
 model Conversation {
   id        String    @id @default(cuid())
   title     String    @default("New Chat")
+  domain    String    @default("general")
   createdAt DateTime  @default(now())
   updatedAt DateTime  @updatedAt
   messages  Message[]
@@ -28,6 +29,7 @@ model Document {
   title     String
   fileType  String          @default("text")
   status    String          @default("processing")
+  domain    String          @default("general")
   createdAt DateTime        @default(now())
   chunks    DocumentChunk[]
 }
