@@ -1,6 +1,6 @@
 import { prisma } from './prisma'
 import { generateEmbedding } from './embeddings'
-import { getDomain } from './domains'
+import { DOMAIN_MAP } from './domains'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -364,7 +364,7 @@ export function buildSystemPrompt(chunks: RetrievedChunk[], domain: string): { s
     pages:         extractPages(c.content),
   }))
 
-  const domainConfig       = getDomain(domain)
+  const domainConfig       = DOMAIN_MAP[domain] ?? DOMAIN_MAP['general']
   const domainInstructions = domainConfig?.systemInstructions ?? ''
 
   // Detect if we have cross-domain context (chunks from multiple legal domains)
