@@ -1,7 +1,7 @@
 'use client'
 
 import Link from 'next/link'
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { DOMAINS } from '@/lib/domains'
 
 // ── Scroll reveal ─────────────────────────────────────────────────────────────
@@ -100,6 +100,102 @@ const IconArrow = () => (
     <path d="M5 12h14M12 5l7 7-7 7"/>
   </svg>
 )
+const IconAlertFlag = () => (
+  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0, marginTop: 3 }}>
+    <path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z"/>
+    <line x1="4" y1="22" x2="4" y2="15"/>
+  </svg>
+)
+const IconTextLines = () => (
+  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round">
+    <line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="15" y2="12"/><line x1="3" y1="18" x2="18" y2="18"/>
+  </svg>
+)
+const IconLayers = () => (
+  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round">
+    <polygon points="12 2 2 7 12 12 22 7 12 2"/><polyline points="2 17 12 22 22 17"/><polyline points="2 12 12 17 22 12"/>
+  </svg>
+)
+const IconImage = () => (
+  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round">
+    <rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/>
+  </svg>
+)
+const IconHexagon = () => (
+  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round">
+    <polygon points="12 2 22 8.5 22 15.5 12 22 2 15.5 2 8.5 12 2"/>
+  </svg>
+)
+
+// ── Domain icons (replaces emoji in domain cards) ──────────────────────────
+const DomainIcons: Record<string, () => JSX.Element> = {
+  general: () => (
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+    </svg>
+  ),
+  traffic: () => (
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round">
+      <rect x="7" y="2" width="10" height="20" rx="2"/>
+      <circle cx="12" cy="7" r="1.5" fill="currentColor" stroke="none"/>
+      <circle cx="12" cy="12" r="1.5" fill="currentColor" stroke="none"/>
+      <circle cx="12" cy="17" r="1.5" fill="currentColor" stroke="none"/>
+    </svg>
+  ),
+  taxation: () => (
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+      <polyline points="14 2 14 8 20 8"/>
+      <line x1="8" y1="13" x2="16" y2="13"/>
+      <line x1="8" y1="17" x2="12" y2="17"/>
+    </svg>
+  ),
+  divorce: () => (
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/>
+      <circle cx="9" cy="7" r="4"/>
+      <path d="M23 21v-2a4 4 0 0 0-3-3.87"/>
+      <path d="M16 3.13a4 4 0 0 1 0 7.75"/>
+    </svg>
+  ),
+  labor: () => (
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round">
+      <rect x="2" y="7" width="20" height="14" rx="2"/>
+      <path d="M16 7V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v2"/>
+      <line x1="12" y1="12" x2="12" y2="16"/>
+      <line x1="10" y1="14" x2="14" y2="14"/>
+    </svg>
+  ),
+  property: () => (
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/>
+      <polyline points="9 22 9 12 15 12 15 22"/>
+    </svg>
+  ),
+  business: () => (
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M6 22V4a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v18Z"/>
+      <path d="M6 12H4a2 2 0 0 0-2 2v6a2 2 0 0 0 2 2h2"/>
+      <path d="M18 9h2a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2h-2"/>
+      <line x1="10" y1="6" x2="10" y2="6.01"/>
+      <line x1="14" y1="6" x2="14" y2="6.01"/>
+      <line x1="10" y1="10" x2="10" y2="10.01"/>
+      <line x1="14" y1="10" x2="14" y2="10.01"/>
+      <line x1="10" y1="14" x2="10" y2="14.01"/>
+      <line x1="14" y1="14" x2="14" y2="14.01"/>
+    </svg>
+  ),
+}
+
+function DomainIconSlug({ slug, center }: { slug: string; center?: boolean }) {
+  const Icon = DomainIcons[slug]
+  if (!Icon) return null
+  return (
+    <div style={{ color: 'var(--color-app-accent)', marginBottom: 10, display: 'flex', justifyContent: center ? 'center' : 'flex-start' }}>
+      <Icon />
+    </div>
+  )
+}
 
 // ── Data ──────────────────────────────────────────────────────────────────────
 const STEPS = [
@@ -122,6 +218,47 @@ const MARQUEE_ITEMS = [
 ]
 
 const CYCLING_DOMAINS = ['Business Registration', 'Traffic Violations', 'Tax Filing', 'Property Law', 'Labor Disputes', 'Family Law']
+
+const AI_RED_FLAGS: { title: string; icon: ReactNode; signals: string[] }[] = [
+  {
+    title: 'Text & Copywriting',
+    icon: <IconTextLines />,
+    signals: [
+      'Overuse of words like "delve", "tapestry", "paramount", "navigate the landscape"',
+      'Verbose but says very little — generalized statements, no original data or opinions',
+      'Unedited AI responses left in copy ("As an AI language model, I cannot…")',
+      'Awkward rigid structure: every section has exactly three bullet points and a closing summary',
+    ],
+  },
+  {
+    title: 'Site Structure',
+    icon: <IconLayers />,
+    signals: [
+      'Hundreds of standalone pages with no logical internal linking',
+      'Default CMS pages still live — "Hello World" posts, lorem ipsum in the footer',
+      'Hundreds of articles all published on the exact same day',
+      'Robotic URL slugs: /topic-feature-benefit-1, /topic-feature-benefit-2',
+    ],
+  },
+  {
+    title: 'Visuals & Media',
+    icon: <IconImage />,
+    signals: [
+      'AI image artifacts — extra fingers, garbled background text, that over-smooth midjourney gloss',
+      'No real human faces on the About page — generic stock models or obvious AI faces',
+      'Images are tangentially related to the keyword but don\'t illustrate the actual content',
+    ],
+  },
+  {
+    title: 'Brand Cohesion',
+    icon: <IconHexagon />,
+    signals: [
+      'Raw uncustomized template — no deliberate design choices, no consistent color palette',
+      'Covers wildly disconnected topics on the same site (keyword chasing, not expertise)',
+      'No clear identity — feels like an empty shell assembled by a script',
+    ],
+  },
+]
 
 function HeroSection() {
   const [idx, setIdx] = useState(0)
@@ -199,9 +336,9 @@ function HeroSection() {
               href={`/chat?domain=${domain.slug}`}
               data-reveal
               data-d={String(Math.min(i + 1, 7))}
-              className={`domain-card text-left px-5 py-4 border border-app-border bg-app-surface rounded-sm cursor-pointer group no-underline ${domain.slug === 'general' ? 'col-span-2 sm:col-span-3' : ''}`}
+              className={`domain-card px-5 py-4 border border-app-border bg-app-surface rounded-sm cursor-pointer group no-underline ${domain.slug === 'general' ? 'col-span-2 sm:col-span-3 text-center' : 'text-left'}`}
             >
-              <div className="text-[22px] mb-2">{domain.icon}</div>
+              <DomainIconSlug slug={domain.slug} center={domain.slug === 'general'} />
               <div className="text-[13px] font-semibold text-app-text group-hover:text-app-accent font-display mb-1">{domain.label}</div>
               <div className="text-[11.5px] text-app-text-subtle leading-relaxed">{domain.description}</div>
             </Link>
@@ -258,7 +395,6 @@ export default function LandingPage() {
       {/* ══ HERO ═════════════════════════════════════════════════════════════ */}
       <HeroSection />
 
-      {/* ══ MARQUEE ══════════════════════════════════════════════════════════ */}
       <section style={{ background: 'var(--color-app-surface)', borderBottom: '1px solid var(--color-app-border)', padding: '18px 0' }}>
         <div className="marquee-wrap">
           <div className="marquee-track">
@@ -388,6 +524,8 @@ export default function LandingPage() {
           ))}
         </div>
       </section>
+
+     
 
       {/* ══ TESTIMONIALS ═════════════════════════════════════════════════════ */}
       <section id="testimonials" style={{ padding: '100px 28px', background: 'var(--color-app-surface)', borderTop: '1px solid var(--color-app-border)' }}>

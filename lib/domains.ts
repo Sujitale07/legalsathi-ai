@@ -10,7 +10,7 @@ export const DOMAINS: LegalDomain[] = [
   {
     slug: 'general',
     label: 'General Legal',
-    description: 'Broad legal questions across any topic — citizenship, rights, consumer issues, and more.',
+    description: 'Broad legal questions across any topic - citizenship, rights, consumer issues, and more.',
     icon: '📋',
     systemInstructions: `<system_instructions>
 You cover any area of Nepalese law — civic procedures, consumer rights, constitutional rights, criminal procedure, property, family, and more. If a question touches foreign law or international jurisdiction, say: "I only cover Nepalese law. For foreign jurisdiction questions, you'll need an international legal expert."
