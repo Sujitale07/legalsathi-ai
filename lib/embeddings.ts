@@ -5,8 +5,8 @@ const ai = new GoogleGenAI({ apiKey: (process.env.GEMINI_API_KEY ?? process.env.
 const EMBED_MODEL      = 'gemini-embedding-2'
 const EMBED_DIMS       = 768
 const BATCH_SIZE       = 50   // max inputs per Gemini embedContent call
-const MAX_RETRIES      = 3
-const RETRY_BASE_MS    = 1000
+const MAX_RETRIES      = 6
+const RETRY_BASE_MS    = 2000
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 

@@ -10,7 +10,25 @@ import { VoiceAssistant } from '@/components/voice/VoiceAssistant'
 type Message    = { id: string; role: string; content: string; createdAt: string }
 type Conversation = { id: string; title: string; domain: string; updatedAt: string }
 type Document   = { id: string; title: string; status: string; _count: { chunks: number } }
-type Source     = { documentId: string; documentTitle: string; chunkIndex: number; totalChunks: number }
+type Source     = { documentId: string; documentTitle: string; chunkIndex: number; totalChunks: number; pages?: number[] }
+
+function toFriendlyError(raw: unknown): string {
+  const str = typeof raw === 'string' ? raw : JSON.stringify(raw)
+  const lower = str.toLowerCase()
+  // Only translate if it looks like a raw technical error (JSON, HTTP codes, SDK output)
+  const looksRaw = str.startsWith('{') || str.startsWith('[') || str.includes('"code":') || str.includes('"status":') || /^chat api error \d/.test(lower)
+  if (!looksRaw) return str || 'Something went wrong. Try again.'
+  if (lower.includes('503') || lower.includes('high demand') || lower.includes('unavailable'))
+    return 'Our servers are a bit busy right now — try again in a moment.'
+  if (lower.includes('429') || lower.includes('quota') || lower.includes('resource_exhausted'))
+    return 'Too many requests at once. Give it a few seconds and try again.'
+  if (lower.includes('abort') || lower.includes('timed out') || lower.includes('timeout'))
+    return 'Took too long to respond. Try a shorter question.'
+  if (lower.includes('401') || lower.includes('403') || lower.includes('api_key') || lower.includes('unauthenticated'))
+    return 'Something went wrong on our end — contact support.'
+  if (lower.includes('500')) return 'Something went wrong on our end. Try again.'
+  return 'Something went wrong. Try again.'
+}
 
 // ─── Functional Icons ─────────────────────────────────────────────────────────
 
@@ -152,6 +170,25 @@ const DocsSkeleton = () => (
   </div>
 )
 
+// ─── Export helpers ───────────────────────────────────────────────────────────
+
+function triggerDownload(content: string, filename: string, mime: string) {
+  const blob = new Blob([content], { type: mime })
+  const url  = URL.createObjectURL(blob)
+  const a    = document.createElement('a')
+  a.href = url; a.download = filename; a.click()
+  URL.revokeObjectURL(url)
+}
+
+function extractScenario(content: string) {
+  const m = content.match(/\{[\s\S]*\}/)
+  if (!m) return null
+  try {
+    const p = JSON.parse(m[0])
+    return p?.sections ? p : null
+  } catch { return null }
+}
+
 // ─── Component ────────────────────────────────────────────────────────────────
 
 export default function ChatPage() {
@@ -180,6 +217,8 @@ export default function ChatPage() {
   const [deletingIds, setDeletingIds] = useState<Set<string>>(new Set())
   const [selectedDomain, setSelectedDomain] = useState<string | null>(null)
   const [voiceOpen, setVoiceOpen] = useState(false)
+  const [exportOpen, setExportOpen] = useState<string | null>(null)  // msg id with dropdown open
+  const [exportingId, setExportingId] = useState<string | null>(null) // msg id being exported
 
   const bottomRef = useRef<HTMLDivElement>(null)
   const scrollContainerRef = useRef<HTMLDivElement>(null)
@@ -227,6 +266,14 @@ export default function ChatPage() {
     }
     init()
   }, [loadConversations, loadDocuments])
+
+  // Close export dropdown when clicking outside
+  useEffect(() => {
+    if (!exportOpen) return
+    const handler = () => setExportOpen(null)
+    document.addEventListener('mousedown', handler)
+    return () => document.removeEventListener('mousedown', handler)
+  }, [exportOpen])
 
   // Poll processing documents every 3 s until they become ready or failed
   useEffect(() => {
@@ -364,16 +411,16 @@ export default function ChatPage() {
             } else if (parsed.suggestions) {
               setMessageSuggestions(p => ({ ...p, [aiId]: parsed.suggestions }))
             } else if (parsed.error) {
-              setFailedMsgs(p => ({ ...p, [aiId]: parsed.error }))
+              setFailedMsgs(p => ({ ...p, [aiId]: toFriendlyError(parsed.error) }))
             }
           } catch { /* skip malformed */ }
         }
       }
     } catch (err) {
-      const errMsg = err instanceof Error
+      const raw = err instanceof Error
         ? (err.name === 'AbortError' ? 'Request timed out — Gemini took too long.' : err.message)
         : 'Something went wrong.'
-      setFailedMsgs(p => ({ ...p, [aiId]: errMsg }))
+      setFailedMsgs(p => ({ ...p, [aiId]: toFriendlyError(raw) }))
     } finally {
       setStreaming(false)
       setStreamingMsgId(null)
@@ -444,6 +491,54 @@ export default function ChatPage() {
       setTimeout(() => setCopiedId(null), 2000)
     })
   }, [])
+
+  const handleExport = useCallback(async (
+    msgId: string,
+    format: 'md' | 'docx' | 'pdf',
+    mode: 'brief' | 'full',
+    content: string,
+  ) => {
+    setExportOpen(null)
+    setExportingId(msgId)
+    const sources = messageSources[msgId] ?? []
+    const scenario = messageScenarios[msgId] ?? extractScenario(content)
+    const title = scenario?.title ?? conversations.find(c => c.id === activeId)?.title ?? 'LegalSathi Export'
+
+    try {
+      if (format === 'md') {
+        const { scenarioToMarkdown, plainToMarkdown } = await import('@/lib/export')
+        const md = scenario
+          ? scenarioToMarkdown(scenario, sources, mode)
+          : plainToMarkdown(content, sources, title)
+        triggerDownload(md, `${title.replace(/[^a-z0-9]+/gi, '_')}.md`, 'text/markdown')
+
+      } else if (format === 'pdf') {
+        const { scenarioToHtml, plainToHtml } = await import('@/lib/export')
+        const html = scenario
+          ? scenarioToHtml(scenario, sources, mode)
+          : plainToHtml(content, sources, title)
+        const win = window.open('', '_blank')
+        if (win) { win.document.write(html); win.document.close() }
+
+      } else if (format === 'docx') {
+        const res = await fetch('/api/export', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ format: 'docx', scenario: scenario ?? { title, sections: [], summary: { content } }, sources, mode }),
+        })
+        if (!res.ok) throw new Error('Export failed')
+        const blob = await res.blob()
+        const url = URL.createObjectURL(blob)
+        const a = document.createElement('a'); a.href = url
+        a.download = res.headers.get('Content-Disposition')?.match(/filename="(.+)"/)?.[1] ?? `${title}.docx`
+        a.click(); URL.revokeObjectURL(url)
+      }
+    } catch (err) {
+      console.error('Export error:', err)
+    } finally {
+      setExportingId(null)
+    }
+  }, [messageSources, messageScenarios, conversations, activeId])
 
   // ── Render ────────────────────────────────────────────────────────────────
 
@@ -688,16 +783,69 @@ export default function ChatPage() {
                       {/* Content */}
                       <div className="flex-1 min-w-0 space-y-3 pt-0.5">
 
-                        {/* Sender label + copy */}
+                        {/* Sender label + copy + export */}
                         <div className="flex items-center justify-between">
                           <span className="text-[11px] font-semibold font-display" style={{ color: '#1E2E4F' }}>LegalSathi</span>
-                          <button
-                            onClick={() => copyMessage(msg.id, msg.content)}
-                            className="flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-medium opacity-0 group-hover:opacity-100 transition-opacity"
-                            style={{ color: copiedId === msg.id ? '#16a34a' : '#9A8E84' }}
-                          >
-                            {copiedId === msg.id ? <><IconCheck /> Copied</> : <><IconCopy /> Copy</>}
-                          </button>
+                          <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                            <button
+                              onClick={() => copyMessage(msg.id, msg.content)}
+                              className="flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-medium"
+                              style={{ color: copiedId === msg.id ? '#16a34a' : '#9A8E84' }}
+                            >
+                              {copiedId === msg.id ? <><IconCheck /> Copied</> : <><IconCopy /> Copy</>}
+                            </button>
+
+                            {/* Export dropdown */}
+                            {!failedMsgs[msg.id] && msg.content && (
+                              <div className="relative">
+                                <button
+                                  onClick={() => setExportOpen(p => p === msg.id ? null : msg.id)}
+                                  className="flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-medium"
+                                  style={{ color: '#9A8E84' }}
+                                  title="Export"
+                                >
+                                  {exportingId === msg.id ? (
+                                    <svg width="10" height="10" viewBox="0 0 16 16" fill="none" className="animate-spin"><circle cx="8" cy="8" r="6" stroke="currentColor" strokeWidth="2" strokeDasharray="20" strokeDashoffset="10"/></svg>
+                                  ) : (
+                                    <svg width="10" height="10" viewBox="0 0 16 16" fill="none"><path d="M8 2v8M5 7l3 3 3-3M3 12h10" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/></svg>
+                                  )}
+                                  Export
+                                </button>
+
+                                {exportOpen === msg.id && (
+                                  <div
+                                    className="absolute right-0 top-full mt-1 z-50 rounded-lg shadow-lg overflow-hidden"
+                                    style={{ backgroundColor: '#FFFFFF', border: '1px solid #E2D9CF', minWidth: 180 }}
+                                  >
+                                    {/* Mode selector */}
+                                    <div className="px-3 pt-2.5 pb-1.5 text-[9px] font-semibold uppercase tracking-wider" style={{ color: '#9A8E84' }}>Export as</div>
+
+                                    {(['md', 'docx', 'pdf'] as const).map(fmt => (
+                                      <div key={fmt} className="px-1 pb-0.5">
+                                        {(['full', 'brief'] as const).map(mode => (
+                                          <button
+                                            key={mode}
+                                            onClick={() => handleExport(msg.id, fmt, mode, msg.content)}
+                                            className="w-full text-left px-3 py-2 rounded text-[11px] flex items-center justify-between hover:bg-app-surface-hover transition-colors"
+                                            style={{ color: '#1A1A2E' }}
+                                          >
+                                            <span>
+                                              {fmt === 'md' ? '📄' : fmt === 'docx' ? '📝' : '🖨️'}{' '}
+                                              {fmt === 'md' ? 'Markdown' : fmt === 'docx' ? 'Word (.docx)' : 'PDF (print)'}
+                                            </span>
+                                            <span className="text-[9px] px-1.5 py-0.5 rounded" style={{ backgroundColor: '#F3EFE8', color: '#5C5349' }}>
+                                              {mode === 'brief' ? 'Brief' : 'Full'}
+                                            </span>
+                                          </button>
+                                        ))}
+                                      </div>
+                                    ))}
+                                    <div className="h-2" />
+                                  </div>
+                                )}
+                              </div>
+                            )}
+                          </div>
                         </div>
 
                         {/* Response text */}
@@ -707,17 +855,14 @@ export default function ChatPage() {
                             if (failedMsgs[msg.id]) {
                               return (
                                 <div
-                                  className="flex items-start gap-2.5 px-3.5 py-3 rounded-lg border-l-[3px] text-[12.5px]"
-                                  style={{ borderColor: '#EF4444', backgroundColor: '#FEF2F2', color: '#7F1D1D' }}
+                                  className="flex items-center gap-2.5 text-[12.5px]"
+                                  style={{ color: '#9A8E84' }}
                                 >
-                                  <svg width="15" height="15" viewBox="0 0 16 16" fill="none" className="shrink-0 mt-0.5">
-                                    <circle cx="8" cy="8" r="7" stroke="#EF4444" strokeWidth="1.5"/>
-                                    <path d="M8 5v4M8 11v.5" stroke="#EF4444" strokeWidth="1.5" strokeLinecap="round"/>
+                                  <svg width="13" height="13" viewBox="0 0 16 16" fill="none" className="shrink-0">
+                                    <circle cx="8" cy="8" r="7" stroke="currentColor" strokeWidth="1.4"/>
+                                    <path d="M8 5v3.5M8 10.5v.5" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round"/>
                                   </svg>
-                                  <div>
-                                    <span className="font-semibold">Failed to respond — </span>
-                                    {failedMsgs[msg.id]}
-                                  </div>
+                                  {failedMsgs[msg.id]}
                                 </div>
                               )
                             }
@@ -757,7 +902,17 @@ export default function ChatPage() {
                                 className="inline-flex items-center gap-1.5 px-3 py-1 text-[11px] font-medium rounded-full"
                                 style={{ backgroundColor: '#E8ECF4', color: '#1E2E4F', border: '1px solid #C8D4E8' }}
                               >
-                                <IconDoc />{s.documentTitle}
+                                <IconDoc />
+                                {s.documentTitle}
+                                {s.pages && s.pages.length > 0 && (
+                                  <span
+                                    className="ml-1 px-1.5 py-0.5 rounded text-[9.5px] font-bold"
+                                    style={{ backgroundColor: '#1E2E4F', color: '#EEE9DF' }}
+                                    title="PDF file page number (may differ from printed document page)"
+                                  >
+                                    PDF p.{s.pages.join(', ')}
+                                  </span>
+                                )}
                               </span>
                             ))}
                           </div>
@@ -902,7 +1057,9 @@ export default function ChatPage() {
                         setSelectedDomain(domain.slug)
                         setTimeout(() => heroTextarea.current?.focus(), 60)
                       }}
-                      className="text-left px-5 py-4 border border-app-border bg-app-surface hover:border-[#1E2E4F] hover:bg-app-surface-hover rounded-sm transition-all cursor-pointer group"
+                      className={`text-left px-5 py-4 border border-app-border bg-app-surface hover:border-[#1E2E4F] hover:bg-app-surface-hover rounded-sm transition-all cursor-pointer group ${
+                        domain.slug === 'general' ? 'col-span-2 sm:col-span-3' : ''
+                      }`}
                     >
                       <div className="text-[22px] mb-2">{domain.icon}</div>
                       <div className="text-[13px] font-semibold text-app-text group-hover:text-[#1E2E4F] font-display mb-1">

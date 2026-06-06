@@ -85,7 +85,7 @@ export async function POST(request: NextRequest) {
           }
         }
       } catch (err) {
-        streamError = err instanceof Error ? err.message : 'Stream error'
+        streamError = friendlyError(err)
         controller.enqueue(encoder.encode(`data: ${JSON.stringify({ error: streamError })}\n\n`))
       } finally {
         if (fullResponse) {
@@ -117,10 +117,15 @@ export async function POST(request: NextRequest) {
                       litigation_lawyer: 'civil_lawyer',
                       general_lawyer:   'civil_lawyer',
                     }
+                    // For traffic domain, criminal_lawyer is never appropriate for routine fines
+                    const TRAFFIC_OVERRIDE: Record<string, string> = {
+                      criminal_lawyer: 'civil_lawyer',
+                    }
                     const types: string[] = scenario.required_lawyers
                       .map((l: { type?: string }) => {
                         const t = l.type?.toLowerCase().trim() ?? ''
-                        return TYPE_MAP[t] ?? t
+                        const mapped = TYPE_MAP[t] ?? t
+                        return domain === 'traffic' ? (TRAFFIC_OVERRIDE[mapped] ?? mapped) : mapped
                       })
                       .filter(Boolean)
                     if (types.length > 0) {
@@ -129,7 +134,10 @@ export async function POST(request: NextRequest) {
                         orderBy: { rating: 'desc' },
                         take: 4,
                       })
-                      if (matched.length > 0) scenario.matched_lawyers = matched
+                      if (matched.length > 0) {
+                        scenario.matched_lawyers = matched
+                        scenario.matched_lawyer_types = types
+                      }
                     }
                   } catch (e) {
                     console.error('Lawyer DB fetch failed:', e)
@@ -191,14 +199,36 @@ export async function POST(request: NextRequest) {
   })
 }
 
+function friendlyError(err: unknown): string {
+  const msg = (err instanceof Error ? err.message : String(err)).toLowerCase()
+  if (msg.includes('503') || msg.includes('unavailable') || msg.includes('high demand'))
+    return 'Our servers are a bit busy right now — try again in a moment.'
+  if (msg.includes('429') || msg.includes('quota') || msg.includes('resource_exhausted'))
+    return 'Too many requests at once. Give it a few seconds and try again.'
+  if (msg.includes('abort') || msg.includes('timed out') || msg.includes('timeout'))
+    return 'Took too long to respond. Try a shorter question.'
+  if (msg.includes('401') || msg.includes('403') || msg.includes('api_key') || msg.includes('unauthenticated'))
+    return 'Something went wrong on our end — contact support.'
+  return 'Something went wrong. Try again.'
+}
+
 async function generateTitle(conversationId: string, firstMessage: string) {
-  const res = await ai.models.generateContent({
-    model: CHAT_MODEL,
-    contents: [{ role: 'user', parts: [{ text: `Write a 4-6 word title for a legal chat that starts with this question.\nReply with ONLY the title, no quotes, no punctuation at the end.\nQuestion: ${firstMessage.slice(0, 200)}` }] }],
-    config: { maxOutputTokens: 20 },
-  })
-  const title = (res.candidates?.[0]?.content?.parts?.[0]?.text ?? '').trim().slice(0, 80)
-  if (title) {
-    await prisma.conversation.update({ where: { id: conversationId }, data: { title } })
+  // Always save a fallback title first so "New Chat" is never shown after the first message
+  const fallback = firstMessage.length > 60 ? firstMessage.slice(0, 57).trimEnd() + '…' : firstMessage
+  await prisma.conversation.update({ where: { id: conversationId }, data: { title: fallback } })
+
+  // Try to upgrade to an AI-generated title (best-effort — quota failures are silently ignored)
+  try {
+    const res = await ai.models.generateContent({
+      model: CHAT_MODEL,
+      contents: [{ role: 'user', parts: [{ text: `Write a 4-6 word title for a legal chat that starts with this question.\nReply with ONLY the title, no quotes, no punctuation at the end.\nQuestion: ${firstMessage.slice(0, 200)}` }] }],
+      config: { maxOutputTokens: 20 },
+    })
+    const aiTitle = (res.candidates?.[0]?.content?.parts?.[0]?.text ?? '').trim().slice(0, 80)
+    if (aiTitle) {
+      await prisma.conversation.update({ where: { id: conversationId }, data: { title: aiTitle } })
+    }
+  } catch {
+    // Quota exceeded or model error — fallback title already saved above, nothing to do
   }
 }

@@ -83,3 +83,94 @@
   -webkit-mask-image: radial-gradient(ellipse 60% 60% at 50% 50%, #000 30%, transparent 70%);
   mask-image: radial-gradient(ellipse 60% 60% at 50% 50%, #000 30%, transparent 70%);
 }
+
+/* ── Hero load animations ── */
+@keyframes hero-up {
+  from { opacity: 0; transform: translateY(28px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+.hero-1 { animation: hero-up 0.65s cubic-bezier(0.16, 1, 0.3, 1) 0.05s both; }
+.hero-2 { animation: hero-up 0.65s cubic-bezier(0.16, 1, 0.3, 1) 0.15s both; }
+.hero-3 { animation: hero-up 0.65s cubic-bezier(0.16, 1, 0.3, 1) 0.25s both; }
+.hero-4 { animation: hero-up 0.65s cubic-bezier(0.16, 1, 0.3, 1) 0.35s both; }
+.hero-5 { animation: hero-up 0.65s cubic-bezier(0.16, 1, 0.3, 1) 0.45s both; }
+
+/* ── Scroll reveal ── */
+[data-reveal] {
+  opacity: 0;
+  transform: translateY(24px);
+  transition: opacity 700ms cubic-bezier(0.16, 1, 0.3, 1),
+              transform 700ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+[data-reveal].in { opacity: 1; transform: translateY(0); }
+[data-reveal][data-d="1"] { transition-delay: 60ms; }
+[data-reveal][data-d="2"] { transition-delay: 130ms; }
+[data-reveal][data-d="3"] { transition-delay: 200ms; }
+[data-reveal][data-d="4"] { transition-delay: 270ms; }
+[data-reveal][data-d="5"] { transition-delay: 340ms; }
+[data-reveal][data-d="6"] { transition-delay: 410ms; }
+[data-reveal][data-d="7"] { transition-delay: 480ms; }
+
+/* ── Domain card hover ── */
+.domain-card {
+  transition: border-color 150ms ease, background 150ms ease,
+              transform 220ms cubic-bezier(0.16, 1, 0.3, 1),
+              box-shadow 220ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+.domain-card:hover {
+  transform: translateY(-3px);
+  box-shadow: 0 8px 24px rgba(26, 26, 46, 0.1);
+  border-color: var(--color-app-border-strong) !important;
+}
+
+/* ── Marquee ── */
+@keyframes marquee {
+  from { transform: translateX(0); }
+  to   { transform: translateX(-50%); }
+}
+.marquee-track {
+  display: flex;
+  width: max-content;
+  animation: marquee 30s linear infinite;
+}
+.marquee-wrap {
+  overflow: hidden;
+  -webkit-mask-image: linear-gradient(to right, transparent 0%, #000 10%, #000 90%, transparent 100%);
+  mask-image: linear-gradient(to right, transparent 0%, #000 10%, #000 90%, transparent 100%);
+}
+
+/* ── Pulse dot ── */
+@keyframes pulse-dot {
+  0%, 100% { opacity: 1; box-shadow: 0 0 0 0 rgba(34,197,94,0.4); }
+  50%       { opacity: 0.8; box-shadow: 0 0 0 4px rgba(34,197,94,0); }
+}
+.pulse-dot { animation: pulse-dot 2.2s ease-in-out infinite; }
+
+/* ── Floating mockup ── */
+@keyframes float {
+  0%, 100% { transform: translateY(0px); }
+  50%       { transform: translateY(-10px); }
+}
+.float-mockup { animation: float 5s ease-in-out infinite; }
+
+/* ── Cycling word fade ── */
+@keyframes word-in {
+  from { opacity: 0; transform: translateY(6px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+.word-cycle {
+  display: inline-block;
+  animation: word-in 0.35s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+/* ── Stat number fade-up ── */
+@keyframes stat-in {
+  from { opacity: 0; transform: translateY(12px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+.stat-visible .stat-val {
+  animation: stat-in 0.6s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+.stat-visible .stat-label {
+  animation: stat-in 0.6s cubic-bezier(0.16, 1, 0.3, 1) 0.12s both;
+}

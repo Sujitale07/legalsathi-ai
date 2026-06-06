@@ -12,6 +12,7 @@ export type RetrievedChunk = {
   documentTitle: string
   chunkIndex: number
   totalChunks: number
+  domain?: string   // which legal domain this chunk came from
 }
 
 export type Source = {
@@ -19,61 +20,207 @@ export type Source = {
   documentTitle: string
   chunkIndex: number
   totalChunks: number
+  pages?: number[]
+}
+
+function extractPages(content: string): number[] {
+  const matches = [...content.matchAll(/\[PAGE (\d+)\]/g)]
+  return [...new Set(matches.map(m => parseInt(m[1])))]
 }
 
 // ─── Config ───────────────────────────────────────────────────────────────────
 
-const SIMILARITY_THRESHOLD  = 0.50
-const MAX_CHUNKS            = 6
-const MAX_CONTEXT_WORDS     = 2000
-const DEDUP_SIMILARITY_GAP  = 0.02
+const SIMILARITY_THRESHOLD = 0.45
+const MAX_CHUNKS           = 6
+const MAX_CONTEXT_WORDS    = 2500
+const RRF_K                = 60
 
-// ─── Retrieval ────────────────────────────────────────────────────────────────
+// ─── Domain Detection ─────────────────────────────────────────────────────────
+//
+// Detects which legal domains a query touches beyond the primary (chat) domain.
+// Used to trigger cross-domain parallel retrieval.
 
-export async function retrieveRelevantChunks(query: string, domain: string): Promise<RetrievedChunk[]> {
-  const queryEmbedding = await generateEmbedding(query)
+const DOMAIN_SIGNALS: Record<string, RegExp> = {
+  traffic:  /\b(license|bluebook|vehicle|driving|bike|car|motorbike|chalani|transport|traffic|road|motorcycle|category|endorse|donotm|dotm)\b/i,
+  taxation: /\b(tax|vat|pan|ird|revenue|fee|tirne|tir|payment|kar|income|customs|shulk|dastoor|rajaswa|fiscal)\b|कर|शुल्क|दस्तुर|राजस्व/i,
+  business: /\b(company|firm|ocr|business|trade|enterprise|incorporate|pvt|ltd|proprietor|startup)\b/i,
+  labor:    /\b(salary|wage|job|employment|worker|leave|bonus|hire|fire|terminate|employer|employee|labour|labor|pf|provident)\b/i,
+  property: /\b(land|property|house|plot|deed|transfer|lalpurja|cadastral|real.?estate)\b|जग्गा|सम्पत्ति/i,
+  divorce:  /\b(divorce|marriage|custody|alimony|separation|spouse|matrimonial)\b/i,
+  general:  /\b(rights|citizenship|nid|court|complaint|constitution|fundamental|writ|police)\b/i,
+}
+
+// Domains that are naturally coupled: when primary domain is X and the query
+// contains fee/tax signals, also pull from the coupled domain.
+const COUPLED_DOMAINS: Record<string, string[]> = {
+  traffic:  ['taxation'],   // bluebook/license renewal → vehicle tax, road tax
+  business: ['taxation'],   // company registration → PAN/VAT registration
+  property: ['taxation'],   // land transfer → stamp duty, capital gains revenue
+  labor:    ['taxation'],   // employment → TDS on salary
+}
+
+// Trigger pattern: signals that cross-domain tax/revenue retrieval is needed
+const TAX_SIGNALS = /\b(tax|fee|tirne|payment|revenue|shulk|kar|pay|vat|pan|ird|dastoor|rajaswa|charge|cost|amount|fine|penalty)\b|कर|शुल्क|दस्तुर|राजस्व/i
+
+function detectQueryDomains(query: string, primaryDomain: string): string[] {
+  const domains: string[] = [primaryDomain]
+
+  // Step 1: Check coupled domains — add them if tax/fee signals present in query
+  for (const coupled of (COUPLED_DOMAINS[primaryDomain] ?? [])) {
+    if (domains.includes(coupled)) continue
+    const domainSignal = DOMAIN_SIGNALS[coupled]
+    if (TAX_SIGNALS.test(query) || (domainSignal && domainSignal.test(query))) {
+      domains.push(coupled)
+    }
+  }
+
+  // Step 2: Direct domain signals — add any domain the query explicitly mentions
+  if (domains.length < 3) {
+    for (const [domain, signal] of Object.entries(DOMAIN_SIGNALS)) {
+      if (domains.includes(domain)) continue
+      if (signal.test(query)) {
+        domains.push(domain)
+        if (domains.length >= 3) break
+      }
+    }
+  }
+
+  return domains
+}
+
+// ─── Query Expansion ─────────────────────────────────────────────────────────
+
+const DOMAIN_PREFIXES: Record<string, string> = {
+  traffic:  'Nepal motor vehicle traffic law rule fine violation सवारी यातायात नियम',
+  taxation: 'Nepal tax law IRD VAT PAN income tax कर ऐन',
+  labor:    'Nepal labor employment contract wage श्रम रोजगार',
+  divorce:  'Nepal family marriage divorce custody separation पारिवारिक विवाह सम्बन्ध विच्छेद',
+  property: 'Nepal property land registration deed transfer सम्पत्ति जग्गा',
+  business: 'Nepal company registration trade business law व्यापार कम्पनी',
+  general:  'Nepal law legal procedure नेपाल कानून',
+}
+
+function expandQuery(query: string, domain: string): string {
+  const prefix = DOMAIN_PREFIXES[domain] ?? DOMAIN_PREFIXES.general
+  return `${prefix} ${query}`
+}
+
+// ─── Single-Domain Retrieval ──────────────────────────────────────────────────
+
+async function retrieveFromDomain(
+  query: string,
+  domain: string,
+  limit: number,
+): Promise<RetrievedChunk[]> {
+  const expanded       = expandQuery(query, domain)
+  const queryEmbedding = await generateEmbedding(expanded)
   const vec            = `[${queryEmbedding.join(',')}]`
+  const vecLimit       = limit * 3
+  const ftsLimit       = limit * 3
 
   const rows = await prisma.$queryRaw<RetrievedChunk[]>`
+    WITH
+      vec_ranked AS (
+        SELECT
+          dc.id,
+          1 - (dc.embedding <=> ${vec}::vector)                                     AS vec_score,
+          ROW_NUMBER() OVER (ORDER BY dc.embedding <=> ${vec}::vector)               AS rnk
+        FROM "DocumentChunk" dc
+        JOIN "Document"      d ON d.id = dc."documentId"
+        WHERE dc.embedding IS NOT NULL
+          AND d.status  = 'ready'
+          AND d.domain  = ${domain}
+          AND 1 - (dc.embedding <=> ${vec}::vector) >= ${SIMILARITY_THRESHOLD}
+        ORDER BY dc.embedding <=> ${vec}::vector
+        LIMIT ${vecLimit}
+      ),
+      fts_ranked AS (
+        SELECT
+          dc.id,
+          ROW_NUMBER() OVER (
+            ORDER BY ts_rank_cd(
+              to_tsvector('simple', dc.content),
+              plainto_tsquery('simple', ${query})
+            ) DESC
+          ) AS rnk
+        FROM "DocumentChunk" dc
+        JOIN "Document"      d ON d.id = dc."documentId"
+        WHERE dc.embedding IS NOT NULL
+          AND d.status = 'ready'
+          AND d.domain = ${domain}
+          AND to_tsvector('simple', dc.content) @@ plainto_tsquery('simple', ${query})
+        LIMIT ${ftsLimit}
+      ),
+      fused AS (
+        SELECT
+          COALESCE(v.id, f.id)                                                        AS id,
+          COALESCE(1.0 / (${RRF_K}::float + v.rnk), 0.0)
+            + COALESCE(1.0 / (${RRF_K}::float + f.rnk), 0.0)                        AS rrf_score
+        FROM      vec_ranked v
+        FULL OUTER JOIN fts_ranked f ON v.id = f.id
+      )
     SELECT
       dc.id,
       dc.content,
       dc."chunkIndex",
       dc."totalChunks",
       dc."documentId",
-      d.title AS "documentTitle",
-      1 - (dc.embedding <=> ${vec}::vector) AS similarity
-    FROM   "DocumentChunk" dc
-    JOIN   "Document"      d  ON d.id = dc."documentId"
-    WHERE  dc.embedding IS NOT NULL
-      AND  d.status = 'ready'
-      AND  (${domain} = 'general' OR d.domain = ${domain})
-      AND  1 - (dc.embedding <=> ${vec}::vector) >= ${SIMILARITY_THRESHOLD}
-    ORDER  BY dc.embedding <=> ${vec}::vector
-    LIMIT  ${MAX_CHUNKS * 2}
+      d.title    AS "documentTitle",
+      fused.rrf_score AS similarity
+    FROM   fused
+    JOIN   "DocumentChunk" dc ON dc.id    = fused.id
+    JOIN   "Document"      d  ON d.id     = dc."documentId"
+    ORDER  BY fused.rrf_score DESC
+    LIMIT  ${limit * 2}
   `
 
-  // ── Deduplicate: keep only the highest-scoring chunk per (documentId, close similarity) ──
-  const seen = new Map<string, number>()
-  const deduped: RetrievedChunk[] = []
+  // Tag each chunk with its source domain
+  return rows.map(r => ({ ...r, domain }))
+}
 
-  for (const row of rows) {
-    const best = seen.get(row.documentId) ?? -1
-    if (row.similarity >= best - DEDUP_SIMILARITY_GAP) {
-      if (row.similarity > best) {
-        seen.set(row.documentId, row.similarity)
-        deduped.push(row)
+// ─── Cross-Domain Retrieval ───────────────────────────────────────────────────
+
+export async function retrieveRelevantChunks(query: string, primaryDomain: string): Promise<RetrievedChunk[]> {
+  const domains  = detectQueryDomains(query, primaryDomain)
+  const perLimit = domains.length === 1
+    ? MAX_CHUNKS
+    : Math.ceil((MAX_CHUNKS + 2) / domains.length)   // slight over-fetch, then trim
+
+  // Parallel retrieval — primary domain failure is fatal; secondary failures are silent
+  const perDomainResults = await Promise.all(
+    domains.map((d, idx) =>
+      retrieveFromDomain(query, d, perLimit).catch(err => {
+        if (idx === 0) throw err   // primary domain must succeed
+        console.error(`Cross-domain retrieval failed for ${d}:`, err)
+        return [] as RetrievedChunk[]
+      })
+    )
+  )
+
+  // Interleave: alternate between primary and secondary to maintain diversity
+  // (primary domain always gets first pick at each round)
+  const seen   = new Set<string>()
+  const merged: RetrievedChunk[] = []
+  const maxLen = Math.max(...perDomainResults.map(r => r.length))
+
+  for (let i = 0; i < maxLen; i++) {
+    for (const domainChunks of perDomainResults) {
+      if (i < domainChunks.length) {
+        const c = domainChunks[i]
+        if (!seen.has(c.id)) {
+          seen.add(c.id)
+          merged.push(c)
+        }
       }
-    } else {
-      deduped.push(row)
     }
   }
 
-  // ── Context budget ──
+  // Sort by RRF score, then apply word budget
+  merged.sort((a, b) => b.similarity - a.similarity)
+
   const budget: RetrievedChunk[] = []
   let totalWords = 0
-
-  for (const chunk of deduped.slice(0, MAX_CHUNKS)) {
+  for (const chunk of merged.slice(0, MAX_CHUNKS)) {
     const words = chunk.content.split(/\s+/).length
     if (totalWords + words > MAX_CONTEXT_WORDS) break
     budget.push(chunk)
@@ -83,19 +230,20 @@ export async function retrieveRelevantChunks(query: string, domain: string): Pro
   return budget
 }
 
-// ─── Prompt builder ───────────────────────────────────────────────────────────
+// ─── Prompt Builder ───────────────────────────────────────────────────────────
 
 const SCENARIO_SCHEMA = `{
   "scenario_id": "string",
+  "response_mode": "violation | procedure | information | rights | emergency",
   "title": "string",
   "user_intent": "string",
   "business_type": "small_business | tech | freelance | import_export | hospitality | real_estate | ngo | general",
   "citations": ["[§1: Document Title]", "[§2: Document Title]"],
   "sections": [
     {
-      "section_type": "flow | checklist | cards | table | map | text | warning | actions",
+      "section_type": "flow | checklist | cards | table | map | text | warning | actions | stats | banner",
       "title": "string",
-      "ui_variant": "stepper | timeline | card_grid | list | compact_list | table | alert_box | minimal_text | checklist",
+      "ui_variant": "stepper | timeline | card_grid | list | compact_list | table | alert_box | minimal_text | checklist | stat_grid | info_banner | comparison",
       "priority": "high | medium | low",
       "content": { "items": [] }
     }
@@ -106,7 +254,7 @@ const SCENARIO_SCHEMA = `{
       "type": "municipality | tax_office | customs | government | legal_firm | other",
       "purpose": "string",
       "location_hint": "string",
-      "image_url": "string (optional, valid Unsplash image URL matching the location type or Nepali buildings)"
+      "image_url": "string (optional)"
     }
   ],
   "required_lawyers": [
@@ -117,32 +265,90 @@ const SCENARIO_SCHEMA = `{
 }`
 
 const UI_RULES = `
-SECTION UI SELECTION RULES:
-- "stepper" when: registration flows, legal process sequences, multi-step government processes
-- "card_grid" when: options, services, document types, lawyer types
-- "table" when: cost breakdowns, fee comparisons (always NPR range format)
-- "alert_box" when: risks, compliance warnings, legal dangers (include severity: high|medium|low)
-- "checklist" when: required documents, obligations, compliance requirements
-- "minimal_text" when: simple explanations, low-importance context
-- "timeline" when: deadlines, renewal schedules, date-based sequences
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+DOMAIN GATE — check BEFORE selecting any response mode
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Step 1: Read the <system_instructions> block at the very top of this prompt.
+Step 2: Determine if the user's query falls within the declared domain scope.
+Step 3:
+  - If OUT OF SCOPE → output the exact refusal phrase from <system_instructions>. Do NOT generate JSON. Do NOT apply any response template. STOP.
+  - If IN SCOPE → continue to Step 4.
+Step 4: Select the matching response template below.
 
-VARIETY & RICHNESS RULES:
-- IMPORTANT: Always organize your legal advice using a rich combination of MULTIPLE different sections and UI variants (at least 2-4 distinct section items).
-- For example, do not just return text or bullet lists. Instead, structure your response with a "stepper" for the sequential steps, a "table" for costs and fees, a "checklist" for required documents, and an "alert_box" for potential risks/penalties.
-- Vary the UI elements dynamically based on the complexity of the query to deliver a beautiful, multi-layered dashboard view.
+CRITICAL: "emergency", "violation", and "procedure" templates only apply when the CURRENT DOMAIN covers that topic.
+A Taxation domain instance MUST refuse traffic, criminal, divorce, and labor queries — no exceptions, even if the query sounds urgent.
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+RESPONSE TEMPLATES — pick ONE mode and follow its section pattern EXACTLY.
+DO NOT mix patterns from different modes. Each query type produces a DIFFERENT visual layout.
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-ITEM SHAPES BY UI TYPE:
-- stepper/timeline items: { "title": "", "description": "", "cost": "NPR X-Y", "duration": "" }
-- card_grid items: { "title": "", "description": "", "tag": "" }
-- table items: { "category": "", "item": "", "cost": "NPR X-Y", "notes": "" }
-- checklist items: { "label": "", "description": "", "required": true }
-- alert_box items: { "severity": "high|medium|low", "title": "", "description": "" }
-- minimal_text items: { "text": "" }
-- next_actions actions: { "label": "", "description": "" }
+MODE: violation  (user broke a rule, got a ticket, committed an offense)
+  response_mode: "violation"
+  summary: short, direct statement of the offense and consequence
+  sections IN THIS ORDER:
+    1. ui_variant="stat_grid"  title="Fine Structure"         priority="high"   → fine amounts per offense tier
+    2. ui_variant="alert_box"  title="Legal Consequences"     priority="high"   → what happens next (points, license, class)
+    3. ui_variant="stepper"    title="What To Do Now"         priority="medium" → steps: pay fine → attend class → collect receipt
+    4. ui_variant="checklist"  title="Documents to Bring"     priority="low"    → documents for fine payment
+  SKIP: lengthy text, comparison tables
+
+MODE: procedure  (how to register, apply, renew, get a license/permit)
+  response_mode: "procedure"
+  summary: what this process achieves and rough timeline
+  sections IN THIS ORDER:
+    1. ui_variant="stepper"    title="Step-by-Step Process"   priority="high"   → numbered steps with cost + duration
+    2. ui_variant="table"      title="Fee Breakdown"          priority="high"   → itemised costs per step
+    3. ui_variant="checklist"  title="Required Documents"     priority="medium" → checklist of docs to prepare
+    4. ui_variant="alert_box"  title="Important Warnings"     priority="low"    → pitfalls, expiry, rejection risks
+  SKIP: stat_grid (use table instead), info_banner
+
+MODE: information  (what is X, what are the rules, speed limits, legal definitions)
+  response_mode: "information"
+  summary: one-sentence direct answer
+  sections IN THIS ORDER:
+    1. ui_variant="info_banner" title="Key Rule"              priority="high"   → single most important fact/limit/definition
+    2. ui_variant="card_grid"   title="Related Rules"         priority="high"   → 2-4 cards covering related sub-rules
+    3. ui_variant="table"       title="Detailed Breakdown"    priority="medium" → table only if there are multiple categories/amounts
+    4. ui_variant="minimal_text" title="Background"           priority="low"    → brief legal context (1-2 sentences max)
+  SKIP: stepper, checklist (no process involved)
+
+MODE: rights  (what are my rights, can they do X, is this legal, I was wronged)
+  response_mode: "rights"
+  summary: direct answer — yes/no + your legal standing
+  sections IN THIS ORDER:
+    1. ui_variant="alert_box"   title="Your Legal Right"      priority="high"   → the specific right being invoked (severity="low" if protected, "high" if violated)
+    2. ui_variant="minimal_text" title="Legal Explanation"    priority="high"   → explain the law in plain language
+    3. ui_variant="stepper"     title="If Your Rights Were Violated" priority="medium" → what to do (file complaint, collect evidence, consult lawyer)
+    4. ui_variant="checklist"   title="Evidence to Collect"   priority="low"    → what to document/preserve
+  SKIP: cost tables unless fines/compensation involved
+
+MODE: emergency  (arrested, FIR filed, accident just happened, urgent situation)
+  response_mode: "emergency"
+  summary: IMMEDIATELY what to do in the next 30 minutes
+  sections IN THIS ORDER:
+    1. ui_variant="alert_box"   title="URGENT — Immediate Steps"  priority="high" severity="high" → do THIS right now
+    2. ui_variant="stepper"     title="Next 24 Hours"             priority="high" → bail, FIR, phone call, lawyer contact
+    3. ui_variant="checklist"   title="Do NOT Do These Things"    priority="high" → critical mistakes to avoid
+    4. ui_variant="info_banner" title="Your Legal Rights"         priority="medium" → right to remain silent, right to lawyer
+  required_lawyers: ALWAYS include criminal_lawyer for emergency mode
+  SKIP: cost tables, map entities (not the time for that)
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+ITEM SHAPES BY UI VARIANT (use EXACT field names):
+  stepper / timeline:  { "title": "", "description": "", "cost": "NPR X-Y", "duration": "X days" }
+  card_grid:           { "title": "", "description": "", "tag": "" }
+  table:               { "category": "", "item": "", "cost": "NPR X-Y", "notes": "" }
+  checklist:           { "label": "", "description": "", "required": true|false }
+  alert_box:           { "severity": "high|medium|low", "title": "", "description": "" }
+  minimal_text:        { "text": "" }
+  stat_grid:           { "value": "NPR 500", "label": "1st Offense", "note": "Section 164(1)" }
+  info_banner:         { "headline": "", "description": "", "tag": "" }
+  comparison:          { "aspect": "", "option_a": "", "option_b": "" }
+  next_actions:        { "label": "", "description": "" }
 
 MAP ENTITIES:
 - Always suggest relevant Nepali institutions (e.g., Ward Office, Ward 24 Office Kathmandu, Department of Industry, Office of Company Registrar Tripureshwor, Inland Revenue Department, Customs Office, etc.) that the user must visit.
-- Optional: populate "image_url" with a beautiful Unsplash photo URL relevant to the place or general Nepali buildings (e.g. "https://images.unsplash.com/photo-1544735716-392fe2489ffa?auto=format&fit=crop&w=400&q=80" or similar) if applicable.
+- Leave "image_url" empty — the UI supplies the correct image automatically.
 
 COSTS: Always NPR, always range format. Never hallucinate specific fee amounts — use reasonable ranges.
 LAWYERS: Only include if genuinely relevant to the question.
@@ -155,19 +361,29 @@ export function buildSystemPrompt(chunks: RetrievedChunk[], domain: string): { s
     documentTitle: c.documentTitle,
     chunkIndex:    c.chunkIndex,
     totalChunks:   c.totalChunks,
+    pages:         extractPages(c.content),
   }))
 
-  const domainConfig = DOMAIN_MAP[domain] ?? DOMAIN_MAP['general']
-  const domainInstructions = domainConfig.systemInstructions ?? ''
+  const domainConfig       = DOMAIN_MAP[domain] ?? DOMAIN_MAP['general']
+  const domainInstructions = domainConfig?.systemInstructions ?? ''
 
-  // Build the XML context block
+  // Detect if we have cross-domain context (chunks from multiple legal domains)
+  const domainsPresent  = [...new Set(chunks.map(c => c.domain).filter(Boolean))]
+  const isMultiDomain   = domainsPresent.length > 1
+  const crossDomainNote = isMultiDomain
+    ? `\n    CROSS-ACT NOTE: This response draws from multiple legal Acts (${domainsPresent.join(', ')}). Cite each Act separately. Clearly distinguish between what the Traffic/Transport Act says vs. what the Tax/Revenue rules say. The user's question spans multiple laws — address each dimension explicitly.`
+    : ''
+
   const contextBlock = chunks.length > 0
     ? `\n\n<retrieved_legal_context>\n${
-        chunks.map((c, i) =>
-          `  <source id="${i + 1}" document="${c.documentTitle}" chunk="${c.chunkIndex + 1} of ${c.totalChunks}" relevance="${c.similarity.toFixed(2)}">\n    <content>\n${c.content}\n    </content>\n  </source>`
-        ).join('\n')
-      }\n  <context_boundary>\n    HARD STOP: You have no legal knowledge beyond the source tags above. If the answer is absent from these sources, respond ONLY with the exact fallback phrase from your system instructions. Do NOT extrapolate.\n  </context_boundary>\n</retrieved_legal_context>`
-    : '\n\n<retrieved_legal_context>\n  <context_boundary>\n    No relevant documents were found in this domain\'s knowledge base for this query. You MUST respond with: "I cannot find a verified legal basis for this in my current context."\n  </context_boundary>\n</retrieved_legal_context>'
+        chunks.map((c, i) => {
+          const pages     = extractPages(c.content)
+          const pageAttr  = pages.length > 0 ? ` pages="${pages.join(', ')}"` : ''
+          const domainAttr = c.domain && c.domain !== domain ? ` domain="${c.domain}"` : ''
+          return `  <source id="${i + 1}" document="${c.documentTitle}"${pageAttr}${domainAttr} chunk="${c.chunkIndex + 1} of ${c.totalChunks}" relevance="${c.similarity.toFixed(2)}">\n    <content>\n${c.content}\n    </content>\n  </source>`
+        }).join('\n')
+      }\n  <context_boundary>\n    Prioritize the source documents above when answering. When citing a source, include the page number if available (e.g. "Traffic Signs Manual, p.12"). If the sources do not fully cover the question but it is within the domain scope, supplement with your pre-trained knowledge of Nepalese law. Only use the fallback phrase if the question is genuinely out of scope or completely unanswerable.${crossDomainNote}\n  </context_boundary>\n</retrieved_legal_context>`
+    : `\n\n[NO KNOWLEDGE BASE DOCUMENTS AVAILABLE FOR THIS QUERY]\nThe vector knowledge base for this domain is currently empty or returned no matches. You MUST use your pre-trained knowledge of Nepalese law to answer the question. Do NOT say you cannot find a legal basis — answer helpfully using what you know about Nepal's laws, staying strictly within this domain's scope.`
 
   const system = `${domainInstructions}
 
@@ -212,13 +428,16 @@ EXACT LAWYER TYPE KEYS — use ONLY these exact strings, nothing else:
   "immigration_lawyer"     → work permits, visas, foreign investment, Department of Immigration
 
 MAPPING GUIDE (common queries → correct type):
-  traffic ticket / speeding fine / traffic accident → "civil_lawyer"
-  hit-and-run / drunk driving → "civil_lawyer", "criminal_lawyer"
+  traffic fine / red light / signal violation / speeding / license / registration → "civil_lawyer" ONLY — NEVER criminal_lawyer for routine fines
+  traffic accident with injury / property damage → "civil_lawyer"
+  hit-and-run / drunk driving / FIR filed / arrest / criminal charge → "civil_lawyer", "criminal_lawyer"
   company registration → "corporate_lawyer", "compliance_lawyer"
   tax problem → "tax_consultant"
   land/property → "property_lawyer" or "land_lawyer"
   job dispute → "labor_lawyer"
   divorce/custody → "family_lawyer"
+
+CRITICAL: criminal_lawyer is ONLY for situations involving an FIR, police arrest, or formal criminal charges. A traffic fine, even for a serious violation like red light or no-helmet, is NOT a criminal matter — use civil_lawyer only.
 
 [RAG OPERATIONAL ARCHITECTURE]
 You operate via a Retrieval-Augmented Generation (RAG) pipeline. Relevant legal facts are provided in the <retrieved_legal_context> tags above. You MUST restrict all answers to that context.

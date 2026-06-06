@@ -1,5 +1,7 @@
 'use client'
 
+import { lookupOfficeImage } from '@/lib/officeImages'
+
 // ─── Types ────────────────────────────────────────────────────────────────────
 
 type Item = Record<string, unknown>
@@ -47,6 +49,7 @@ interface ScenarioData {
   map_entities: MapEntity[]
   required_lawyers: Lawyer[]
   matched_lawyers?: MatchedLawyer[]
+  matched_lawyer_types?: string[]
   summary: { ui_variant: string; content: string }
   next_actions: { ui_variant: string; actions: Item[] }
 }
@@ -287,6 +290,104 @@ function TextSection({ title, items }: { title: string; items: Item[] }) {
   )
 }
 
+function StatGridSection({ title, items }: { title: string; items: Item[] }) {
+  const cols = items.length <= 2 ? 'grid-cols-2' : items.length === 4 ? 'grid-cols-2 sm:grid-cols-4' : 'grid-cols-3'
+  return (
+    <div>
+      <SectionHeader title={title} />
+      <div className={`grid ${cols} gap-3 mt-3`}>
+        {items.map((item, i) => (
+          <div
+            key={i}
+            className="p-4 rounded-xl border text-center"
+            style={{ borderColor: '#C8D4E8', backgroundColor: '#F5F7FB' }}
+          >
+            <div className="text-[22px] font-bold leading-none" style={{ color: '#1E2E4F' }}>
+              {str(item, 'value', 'amount', 'cost', 'fee')}
+            </div>
+            <div className="text-[11px] font-semibold uppercase tracking-wide mt-1.5" style={{ color: '#5C5349' }}>
+              {str(item, 'label', 'title', 'name')}
+            </div>
+            {str(item, 'note', 'description', 'detail') && (
+              <div className="text-[10.5px] mt-1 leading-[1.5]" style={{ color: '#9A8E84' }}>
+                {str(item, 'note', 'description', 'detail')}
+              </div>
+            )}
+          </div>
+        ))}
+      </div>
+    </div>
+  )
+}
+
+function InfoBannerSection({ title, items }: { title: string; items: Item[] }) {
+  const item = items[0]
+  if (!item) return null
+  return (
+    <div
+      className="p-5 rounded-xl"
+      style={{ background: 'linear-gradient(135deg, #1E2E4F 0%, #2D4070 100%)' }}
+    >
+      {str(item, 'tag', 'type') && (
+        <span
+          className="inline-block text-[10px] font-bold uppercase tracking-widest px-2.5 py-1 rounded-full mb-3"
+          style={{ backgroundColor: 'rgba(255,255,255,0.15)', color: '#A8B4C8' }}
+        >
+          {str(item, 'tag', 'type')}
+        </span>
+      )}
+      {!str(item, 'tag', 'type') && title && (
+        <div className="text-[10.5px] font-bold uppercase tracking-widest mb-2" style={{ color: '#A8B4C8' }}>
+          {title}
+        </div>
+      )}
+      <div className="text-[18px] font-bold leading-snug" style={{ color: '#EEE9DF' }}>
+        {str(item, 'headline', 'title', 'name')}
+      </div>
+      {str(item, 'description', 'detail', 'info') && (
+        <div className="text-[13px] mt-2.5 leading-[1.75]" style={{ color: '#C8D4E8' }}>
+          {str(item, 'description', 'detail', 'info')}
+        </div>
+      )}
+    </div>
+  )
+}
+
+function ComparisonSection({ title, items }: { title: string; items: Item[] }) {
+  if (!items.length) return null
+  const headerA = str(items[0], 'option_a_label') || 'Option A'
+  const headerB = str(items[0], 'option_b_label') || 'Option B'
+  return (
+    <div>
+      <SectionHeader title={title} />
+      <div className="mt-3 rounded-xl overflow-hidden border" style={{ borderColor: '#E2D9CF' }}>
+        <div className="grid grid-cols-3 text-[11px] font-bold uppercase tracking-wider" style={{ backgroundColor: '#F3EFE8' }}>
+          <div className="px-4 py-2.5" style={{ color: '#9A8E84' }}>Aspect</div>
+          <div className="px-4 py-2.5 border-l" style={{ color: '#1E2E4F', borderColor: '#E2D9CF' }}>{headerA}</div>
+          <div className="px-4 py-2.5 border-l" style={{ color: '#1E2E4F', borderColor: '#E2D9CF' }}>{headerB}</div>
+        </div>
+        {items.map((row, i) => (
+          <div
+            key={i}
+            className="grid grid-cols-3 text-[12.5px]"
+            style={{ borderTop: '1px solid #E2D9CF', backgroundColor: i % 2 === 0 ? '#FFFFFF' : '#FAF8F4' }}
+          >
+            <div className="px-4 py-2.5 font-medium" style={{ color: '#5C5349' }}>
+              {str(row, 'aspect', 'category', 'label')}
+            </div>
+            <div className="px-4 py-2.5 border-l" style={{ color: '#1A1A2E', borderColor: '#E2D9CF' }}>
+              {str(row, 'option_a', 'value_a', 'a')}
+            </div>
+            <div className="px-4 py-2.5 border-l" style={{ color: '#1A1A2E', borderColor: '#E2D9CF' }}>
+              {str(row, 'option_b', 'value_b', 'b')}
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  )
+}
+
 function MapEntitiesSection({ entities }: { entities: MapEntity[] }) {
   if (!entities?.length) return null
   const typeColors: Record<string, { bg: string; color: string }> = {
@@ -298,13 +399,13 @@ function MapEntitiesSection({ entities }: { entities: MapEntity[] }) {
     other:         { bg: '#F3EFE8', color: '#5C5349' },
   }
 
-  const defaultImages: Record<string, string> = {
-    municipality:  'https://images.unsplash.com/photo-1577495508048-b635879837f1?auto=format&fit=crop&w=400&q=80',
-    tax_office:    'https://images.unsplash.com/photo-1541872703-74c5e44368f9?auto=format&fit=crop&w=400&q=80',
-    customs:       'https://images.unsplash.com/photo-1578575437130-527eed3abbec?auto=format&fit=crop&w=400&q=80',
-    government:    'https://images.unsplash.com/photo-1544735716-392fe2489ffa?auto=format&fit=crop&w=400&q=80',
-    legal_firm:    'https://images.unsplash.com/photo-1589829545856-d10d557cf95f?auto=format&fit=crop&w=400&q=80',
-    other:         'https://images.unsplash.com/photo-1486406146926-c627a92ad1ab?auto=format&fit=crop&w=400&q=80'
+  const typeIcons: Record<string, string> = {
+    municipality: '🏛️',
+    tax_office:   '🧾',
+    customs:      '📦',
+    government:   '🏢',
+    legal_firm:   '⚖️',
+    other:        '🏢',
   }
 
   return (
@@ -313,18 +414,27 @@ function MapEntitiesSection({ entities }: { entities: MapEntity[] }) {
       <div className="grid grid-cols-2 gap-3 mt-3">
         {entities.map((e, i) => {
           const c = typeColors[e.type] ?? typeColors.other
+          const imageUrl = e.image_url || lookupOfficeImage(e.name)
           return (
             <div
               key={i}
               className="rounded-lg border overflow-hidden flex flex-col"
               style={{ borderColor: '#E2D9CF', backgroundColor: '#FFFFFF' }}
             >
-              {/* Image of the place */}
-              <img 
-                src={e.image_url || defaultImages[e.type] || defaultImages.other} 
-                alt={e.name}
-                className="w-full h-28 object-cover"
-              />
+              {imageUrl ? (
+                <img
+                  src={imageUrl}
+                  alt={e.name}
+                  className="w-full h-28 object-cover"
+                />
+              ) : (
+                <div
+                  className="w-full h-28 flex items-center justify-center"
+                  style={{ backgroundColor: c.bg }}
+                >
+                  <span style={{ fontSize: 38 }}>{typeIcons[e.type] ?? '🏢'}</span>
+                </div>
+              )}
               
               {/* Body content */}
               <div className="p-3.5 flex-1 flex flex-col justify-between">
@@ -388,7 +498,7 @@ function MapEntitiesSection({ entities }: { entities: MapEntity[] }) {
   )
 }
 
-function MatchedLawyersSection({ lawyers }: { lawyers: MatchedLawyer[] }) {
+function MatchedLawyersSection({ lawyers, matchedTypes }: { lawyers: MatchedLawyer[]; matchedTypes?: string[] }) {
   if (!lawyers?.length) return null
   const specialtyIcons: Record<string, string> = {
     business_registration_lawyer: '🏢',
@@ -455,9 +565,12 @@ function MatchedLawyersSection({ lawyers }: { lawyers: MatchedLawyer[] }) {
               </div>
             </div>
 
-            {/* Specialties */}
+            {/* Specialties — only show the ones relevant to this query context */}
             <div className="px-4 pt-2.5 pb-2 flex flex-wrap gap-1.5">
-              {l.specialties.map((s) => (
+              {(matchedTypes && matchedTypes.length > 0
+                ? l.specialties.filter(s => matchedTypes.includes(s))
+                : l.specialties
+              ).map((s) => (
                 <span
                   key={s}
                   className="inline-flex items-center gap-1 text-[10.5px] font-medium px-2 py-0.5 rounded-full"
@@ -572,6 +685,33 @@ function LawyerCardsSection({ lawyers }: { lawyers: Lawyer[] }) {
 
 function SummaryCard({ summary }: { summary: ScenarioData['summary'] }) {
   if (!summary?.content) return null
+
+  if (summary.ui_variant === 'plain_text') {
+    return (
+      <p className="text-[13.5px] leading-[1.8]" style={{ color: '#5C5349' }}>
+        {summary.content}
+      </p>
+    )
+  }
+
+  if (summary.ui_variant === 'bullet_list') {
+    const bullets = summary.content.split(/\n|•/).map(s => s.trim()).filter(Boolean)
+    return (
+      <div className="p-4 rounded-lg border" style={{ borderColor: '#E2D9CF', backgroundColor: '#FAF8F4' }}>
+        <div className="text-[11px] font-bold uppercase tracking-widest mb-2.5" style={{ color: '#1E2E4F' }}>Summary</div>
+        <ul className="space-y-1.5">
+          {bullets.map((b, i) => (
+            <li key={i} className="flex gap-2 text-[13px] leading-[1.7]" style={{ color: '#1A1A2E' }}>
+              <span className="shrink-0 mt-1.5 w-1.5 h-1.5 rounded-full" style={{ backgroundColor: '#1E2E4F' }} />
+              {b}
+            </li>
+          ))}
+        </ul>
+      </div>
+    )
+  }
+
+  // highlight_card (default)
   return (
     <div
       className="p-4 rounded-lg border-l-[3px]"
@@ -651,6 +791,12 @@ function renderSection(section: Section, index: number) {
       return <ChecklistSection key={index} title={title} items={items} />
     case 'alert_box':
       return <AlertSection key={index} title={title} items={items} />
+    case 'stat_grid':
+      return <StatGridSection key={index} title={title} items={items} />
+    case 'info_banner':
+      return <InfoBannerSection key={index} title={title} items={items} />
+    case 'comparison':
+      return <ComparisonSection key={index} title={title} items={items} />
     case 'minimal_text':
     case 'list':
     case 'compact_list':
@@ -681,7 +827,7 @@ export default function ScenarioRenderer({ data }: { data: ScenarioData }) {
 
       {/* Real matched lawyers from DB — shown instead of generic type cards when available */}
       {data.matched_lawyers?.length
-        ? <MatchedLawyersSection lawyers={data.matched_lawyers} />
+        ? <MatchedLawyersSection lawyers={data.matched_lawyers} matchedTypes={data.matched_lawyer_types} />
         : data.required_lawyers?.length > 0 && <LawyerCardsSection lawyers={data.required_lawyers} />
       }
 
