@@ -1,182 +1,159 @@
 # LegalSathi AI — UI Design Specification
 
-> Enforces Uncodixfy principles: clean, functional, human-designed.
-> Reference aesthetic: Linear, Stripe, GitHub, Raycast.
+> Full-screen, immersive, modern. Dark sidebar + white main. Perplexity Pro aesthetic.
+> Reference: Perplexity Pro, Linear, Vercel dashboard.
 
 ---
 
-## Color Palette — "Porcelain Clean"
+## Color Palette
 
-| Role        | Token             | Hex       |
-|-------------|-------------------|-----------|
-| Background  | `--bg`            | `#f9fafb` |
-| Surface     | `--surface`       | `#ffffff`  |
-| Primary     | `--primary`       | `#4f46e5` |
-| Secondary   | `--secondary`     | `#8b5cf6` |
-| Accent      | `--accent`        | `#ec4899` |
-| Text        | `--text`          | `#111827` |
-| Muted Text  | `--text-muted`    | `#6b7280` |
-| Border      | `--border`        | `#e5e7eb` |
-| Error       | `--error`         | `#dc2626` |
-| Warning     | `--warning`       | `#d97706` |
-| Success     | `--success`       | `#059669` |
+### Sidebar (dark)
+
+| Role          | Token                | Hex       |
+|---------------|----------------------|-----------|
+| Background    | `--sb-bg`            | `#1e1e2e` |
+| Surface       | `--sb-surface`       | `#2a2a3d` |
+| Surface hover | `--sb-hover`         | `#313147` |
+| Border        | `--sb-border`        | `#2d2d3d` |
+| Text          | `--sb-text`          | `#e2e8f0` |
+| Text muted    | `--sb-muted`         | `#8892a4` |
+| Active bg     | `--sb-active-bg`     | `#2d2b52` |
+| Active border | `--sb-active-border` | `#6366f1` |
+
+### Main (light)
+
+| Role           | Token              | Hex       |
+|----------------|--------------------|-----------|
+| Background     | `--bg`             | `#ffffff` |
+| Surface        | `--surface`        | `#f8fafc` |
+| Surface hover  | `--surface-hover`  | `#f1f5f9` |
+| Primary        | `--primary`        | `#6366f1` |
+| Primary dark   | `--primary-dark`   | `#4f46e5` |
+| Primary tint   | `--primary-tint`   | `#eef2ff` |
+| Text           | `--text`           | `#0f172a` |
+| Text muted     | `--text-muted`     | `#64748b` |
+| Text subtle    | `--text-subtle`    | `#94a3b8` |
+| Border         | `--border`         | `#e2e8f0` |
+| Border strong  | `--border-strong`  | `#cbd5e1` |
+| Error          | `--error`          | `#ef4444` |
+| Success        | `--success`        | `#10b981` |
 
 ---
 
 ## Typography
 
-- **Font:** Geist Sans (already set in Next.js default layout) — system fallback: `ui-sans-serif, system-ui, sans-serif`
-- **Body:** 14–15px, `font-weight: 400`, `line-height: 1.6`, color `--text`
-- **Labels / metadata:** 13px, `--text-muted`, `font-weight: 500`
-- **Headings:** `font-weight: 600`, no letter-spacing, no uppercase, no gradient text
-- **Scale:**
-  - `text-sm` (13px) — labels, captions
-  - `text-base` (15px) — body copy
-  - `text-lg` (18px) — section headings
-  - `text-2xl` (24px) — page titles
-  - `text-3xl` (30px) — landing hero only
-
-**Banned typography:**
-- Eyebrow labels (`<small>SECTION TITLE</small>`)
-- Gradient text fills
-- Mixed serif + sans combinations
-- Uppercase + letter-spacing decorative headers
+- **Font:** Geist Sans — fallback: `ui-sans-serif, system-ui, sans-serif`
+- **Body:** 15px, `font-weight: 400`, `line-height: 1.7`
+- **Sidebar items:** 13px, `--sb-muted`
+- **Labels:** 12px, uppercase, `letter-spacing: 0.06em` — sidebar section headers only
+- **Headings:** `font-weight: 600`, no letter-spacing in main content
+- **Hero heading:** 28px, `font-weight: 700`, `letter-spacing: -0.5px`
+- **Messages:** 15px, `line-height: 1.75`
 
 ---
 
 ## Spacing
 
-Strict 4px base scale. Use only: `4, 8, 12, 16, 20, 24, 32, 48, 64px`.
-No random padding values. No overpadded containers.
+4px base scale: `4, 8, 12, 16, 20, 24, 32, 48, 64px`.
 
 ---
 
 ## Border Radius
 
-| Element    | Radius      |
-|------------|-------------|
-| Buttons    | `6px`       |
-| Inputs     | `6px`       |
-| Cards      | `8px`       |
-| Badges     | `4px`       |
-| Avatars    | `50%` (circle) |
-| Modals     | `8px`       |
+| Element         | Radius               |
+|-----------------|----------------------|
+| Buttons         | `8px`                |
+| Inputs          | `12px`               |
+| Input hero      | `16px`               |
+| Cards           | `12px`               |
+| Sidebar items   | `8px`                |
+| Avatars         | `50%`                |
+| User bubble     | `20px 20px 4px 20px` |
+| Suggestion chip | `8px`                |
+| Brand mark      | `10px`               |
 
-**Max allowed anywhere: `12px`.** No pill shapes, no `rounded-full` on non-circular elements.
+---
+
+## Shadows
+
+- **Input hero focus:** `0 0 0 4px rgba(99,102,241,0.18)`
+- **Input bar:** `0 -1px 0 var(--border)`
+- **Floating input:** `0 4px 24px rgba(0,0,0,0.08), 0 1px 4px rgba(0,0,0,0.04)`
+- **Card:** `0 1px 3px rgba(0,0,0,0.06)`
 
 ---
 
 ## Components
 
-### Navbar
-- Height: `56px`, `border-bottom: 1px solid var(--border)`, background `--surface`
-- Brand: text only (`font-weight: 700`, `--text`), no gradient logo block
-- Nav links: `14px`, `--text-muted` default, `--text` on hover, `--primary` on active
-- Active state: `border-bottom: 2px solid var(--primary)` — no pill background
-- CTA button: solid `--primary` fill, `6px` radius, no gradient, `14px` text
-- Mobile: hamburger icon toggle, no animated slide-in — simple `display: block/none`
+### Sidebar
 
-### Footer
-- `border-top: 1px solid var(--border)`, background `--surface`
-- 3-column grid on desktop, stacked on mobile
-- Links: `14px --text-muted`, hover `--text`
-- No decorative copy, no graphic elements, minimal height (~120px)
+- Width: `260px` fixed
+- Background: `--sb-bg` (`#1e1e2e`)
+- Header: `60px` tall, brand mark + name, bottom border `--sb-border`
+- Nav items: `13px`, `--sb-muted`, padding `8px 12px`, radius `8px`
+- Active: bg `--sb-active-bg`, `border-left: 3px solid --sb-active-border`, text `#fff`, `font-weight: 500`
+- Hover: bg `--sb-hover`
+- Section headers: `11px uppercase letter-spacing:0.06em`, color `--sb-muted`, opacity 0.6
+- Delete button: hidden by default, appears on row hover, color `--sb-muted` → `#ef4444`
+- No border on right side of sidebar — hard contrast with white main handles visual separation
+
+### Chat Layout (active)
+
+- Topbar: `56px`, bg `--bg`, `border-bottom: 1px solid --border`, title `15px font-weight:600`
+- Message list: vertically scrollable, max-width `760px` centered, `gap: 32px`, `padding: 40px 24px`
+- Input bar: fixed bottom, bg `--bg`, `border-top: 1px solid --border`, `padding: 16px 24px`
+
+### Empty State (hero)
+
+- Full-height centered column, no topbar
+- Brand mark: `56px`, radius `10px`, bg `--primary`, white text
+- Heading: `28px font-weight:700`, `letter-spacing: -0.5px`
+- Sub-text: `16px --text-muted`
+- Hero input: `width: 100%`, `max-width: 680px`, radius `16px`, `padding: 20px 24px`, `font-size: 16px`, border `1px solid --border`
+- Focus: `box-shadow: 0 0 0 4px rgba(99,102,241,0.18)`, `border-color: --primary`
+- Suggestion chips: row of 3, border `1px solid --border`, radius `8px`, `12px`, bg `--surface`, hover bg `--surface-hover`
 
 ### Buttons
-- **Primary:** bg `--primary`, text white, `6px` radius, `px-4 py-2`, `font-weight: 500`
-- **Secondary:** bg `--surface`, border `--border`, text `--text`, same sizing
-- **Danger:** bg `--error`, text white
-- Hover: `opacity: 0.9` — no transform, no shadow changes
-- No gradient backgrounds, no pill shapes, no glow effects
 
-### Cards
-- bg `--surface`, border `1px solid var(--border)`, radius `8px`
-- Shadow: `0 1px 4px rgba(0,0,0,0.06)` max — no dramatic drop shadows
-- Padding: `20px` consistent
-- Hover on clickable cards: border color shift to `--primary` at low opacity — no lift/translate effect
-
-### Inputs & Textareas
-- Border: `1px solid var(--border)`, radius `6px`, bg `--surface`
-- Focus: `border-color: var(--primary)`, `outline: 2px solid rgba(79,70,229,0.2)`
-- No floating labels, no animated underlines, no morphing shapes
-- Label always above the input, `13px --text-muted font-weight: 500`
-
-### Badges / Risk Labels
-- Padding: `2px 8px`, radius `4px`, `12px font-weight: 500`
-- Low risk: bg `#dcfce7`, text `#15803d`
-- Medium risk: bg `#fef9c3`, text `#a16207`
-- High risk: bg `#fee2e2`, text `#dc2626`
-- No glow, no drop shadow, no pulse animation
+- **Primary:** bg `--primary`, text white, `8px` radius, `px-5 py-2.5`, `font-weight: 500`
+- **Send (circle):** `40px` circle, bg `--primary`, white icon, disabled: `--border` bg
+- Hover: `opacity: 0.88`
+- Disabled: `opacity: 0.45`, `cursor: not-allowed`
 
 ### Chat Bubbles
-- User message: bg `--primary`, text white, radius `8px 8px 2px 8px`, `px-4 py-3`
-- AI message: bg `--surface`, border `1px solid var(--border)`, radius `8px 8px 8px 2px`
-- No floating glassmorphism panels, no dramatic shadows
-- Avatar: 32px circle, simple initials or icon — no status rings
 
-### Lawyer Cards
-- Standard card pattern (see Cards above)
-- Photo: 48px circle, simple, no decorative border
-- Rating: simple star icons, no glow
-- Specialization chips: `4px` radius, border `1px solid var(--border)`, `12px` text — no pill shapes
-- "Featured" badge: `4px` radius, bg `--primary` at 10% opacity, text `--primary`, `font-weight: 600`
+- **User:** bg `--primary`, text white, `border-radius: 20px 20px 4px 20px`, `px-5 py-3.5`, max-width 65%, `font-size: 15px`
+- **AI:** full-width prose block under avatar, no bubble background
+  - Left accent bar: `border-left: 3px solid #c7d2fe` (indigo-200), `padding-left: 20px`
+  - AI label: `12px font-weight:600 --primary`
+  - Content: `15px line-height:1.75 --text`
 
----
+### Inputs
 
-## Page Layouts
-
-### Landing Page
-- Max-width container: `1200px` centered, `px-6` sides
-- Hero section: full-width, bg `--bg`, no gradient background, no floating panels
-- Feature cards: 3-column grid, `gap-6`, standard card pattern
-- Stats row: 4 columns, large numbers `text-3xl font-bold`, label `14px --text-muted`
-- No hero sections inside other sections, no decorative copy blocks
-
-### Chat Page
-- Two-panel layout: narrow info sidebar (240px) + main chat area
-- Or: single column if sidebar adds no value — don't force it
-- Message list: vertically scrollable, `gap-4` between messages
-- Input area: `border-top: 1px solid var(--border)`, fixed at bottom of chat area
-
-### Contract Review Page
-- Single-column, centered, max-width `720px`
-- Upload area: dashed `border: 2px dashed var(--border)`, simple drag-drop cue
-- Results: stacked sections with `border-top` dividers, no nested card-in-card
-
-### Lawyer Directory
-- Filter bar: horizontal row below page title, simple `select` dropdowns + text input
-- Grid: `3 col → 2 col → 1 col` responsive, `gap-5`
-
-### Lawyer Profile
-- Two-column: main content left (2/3), contact sidebar right (1/3)
-- Simple `border-left: 1px solid var(--border)` on sidebar — no floating panel
+- Border: `1px solid --border`, bg `--bg`
+- Focus: `border-color: --primary`, `box-shadow: 0 0 0 3px rgba(99,102,241,0.15)`
+- No floating labels
 
 ---
 
 ## Animations & Transitions
 
-- Duration: `150ms ease` for color/border/opacity changes
-- No `transform`, no `translateX/Y`, no `scale` on hover
-- No bouncy easings, no spring animations
-- No skeleton loaders with shimmer animations (simple `opacity: 0.5` pulse max)
+- Color/border/opacity/shadow: `150ms ease`
+- Height (textarea expand): `100ms ease`
+- No transforms, no scale on hover, no spring animations
+- Thinking dots: `opacity` pulse only (`0.3 → 1`), no translate
 
 ---
 
-## Explicitly Banned for This Project
+## Explicitly Banned
 
-- No gradient backgrounds anywhere (hero or otherwise)
+- No gradient backgrounds
+- No glassmorphism
+- No colored glows (focus ring excepted)
 - No `rounded-full` on non-circular elements
-- No glassmorphism / backdrop-filter blur panels
-- No colored box shadows or glows
-- No eyebrow labels (`<small>CATEGORY</small>` style)
-- No hero sections inside the dashboard or app pages
-- No metric-card grid as default layout
-- No decorative copy ("Operational clarity without the clutter")
-- No uppercase + letter-spacing labels
+- No uppercase in main content area
 - No transform animations on hover
-- No pill-shaped buttons or tags
-- No blue-black gradient "premium dark" mode
-- No fake charts to fill space
-- No status dots with `::before` pseudo-elements
-- No sticky right rail unless genuinely needed
-- No nav badges with counts
+- No pill buttons (circle send button excepted)
+- No fake charts or decorative graphics
+- No dramatic drop shadows in main content
+- No hero sections inside the active chat view
