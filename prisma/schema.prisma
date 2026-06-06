@@ -6,32 +6,50 @@ datasource db {
   provider = "postgresql"
 }
 
+model User {
+  id            String         @id @default(cuid())
+  clerkUserId   String         @unique
+  role          String         @default("user")
+  createdAt     DateTime       @default(now())
+  conversations Conversation[]
+  messages      Message[]
+  documents     Document[]
+  ingestionLogs IngestionLog[]
+}
+
 model Conversation {
-  id        String    @id @default(cuid())
-  title     String    @default("New Chat")
-  domain    String    @default("general")
-  createdAt DateTime  @default(now())
-  updatedAt DateTime  @updatedAt
-  messages  Message[]
+  id          String    @id @default(cuid())
+  title       String    @default("New Chat")
+  domain      String    @default("general")
+  clerkUserId String?
+  user        User?     @relation(fields: [clerkUserId], references: [clerkUserId])
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  messages    Message[]
 }
 
 model Message {
   id             String       @id @default(cuid())
   role           String
   content        String
+  clerkUserId    String?
+  user           User?        @relation(fields: [clerkUserId], references: [clerkUserId])
   createdAt      DateTime     @default(now())
   conversation   Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
   conversationId String
 }
 
 model Document {
-  id        String          @id @default(cuid())
-  title     String
-  fileType  String          @default("text")
-  status    String          @default("processing")
-  domain    String          @default("general")
-  createdAt DateTime        @default(now())
-  chunks    DocumentChunk[]
+  id            String         @id @default(cuid())
+  title         String
+  fileType      String         @default("text")
+  status        String         @default("processing")
+  domain        String         @default("general")
+  uploadedBy    String?
+  uploader      User?          @relation(fields: [uploadedBy], references: [clerkUserId])
+  createdAt     DateTime       @default(now())
+  chunks        DocumentChunk[]
+  ingestionLogs IngestionLog[]
 }
 
 model DocumentChunk {
@@ -43,6 +61,17 @@ model DocumentChunk {
   documentId  String
   document    Document                    @relation(fields: [documentId], references: [id], onDelete: Cascade)
   createdAt   DateTime                    @default(now())
+}
+
+model IngestionLog {
+  id          String   @id @default(cuid())
+  adminUserId String
+  documentId  String
+  status      String
+  error       String?
+  createdAt   DateTime @default(now())
+  admin       User     @relation(fields: [adminUserId], references: [clerkUserId])
+  document    Document @relation(fields: [documentId], references: [id], onDelete: Cascade)
 }
 
 model Lawyer {

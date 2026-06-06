@@ -27,9 +27,9 @@ export function Navbar() {
       <div style={{ maxWidth: '1200px', margin: '0 auto', padding: '0 24px', height: '64px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
         {/* Logo */}
         <Link href="/" style={{ display: 'flex', alignItems: 'center', gap: '10px', textDecoration: 'none' }}>
-          <div style={{ width: '34px', height: '34px', borderRadius: '9px', background: C.primary, color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+          {/* <div style={{ width: '34px', height: '34px', borderRadius: '9px', background: C.primary, color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
             <Scale size={16} strokeWidth={2.5} />
-          </div>
+          </div> */}
           <span style={{ fontSize: '17px', fontWeight: 700, color: '#0f172a', letterSpacing: '-0.3px' }}>LegalSathi AI</span>
         </Link>
 
