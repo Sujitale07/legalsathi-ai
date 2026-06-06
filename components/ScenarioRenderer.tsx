@@ -25,6 +25,20 @@ interface Lawyer {
   reason: string
 }
 
+interface MatchedLawyer {
+  id: string
+  name: string
+  specialties: string[]
+  location: string
+  phone?: string | null
+  email?: string | null
+  experience: number
+  bio: string
+  languages: string[]
+  fee?: string | null
+  available: boolean
+}
+
 interface ScenarioData {
   title: string
   user_intent: string
@@ -32,6 +46,7 @@ interface ScenarioData {
   sections: Section[]
   map_entities: MapEntity[]
   required_lawyers: Lawyer[]
+  matched_lawyers?: MatchedLawyer[]
   summary: { ui_variant: string; content: string }
   next_actions: { ui_variant: string; actions: Item[] }
 }
@@ -373,17 +388,163 @@ function MapEntitiesSection({ entities }: { entities: MapEntity[] }) {
   )
 }
 
+function MatchedLawyersSection({ lawyers }: { lawyers: MatchedLawyer[] }) {
+  if (!lawyers?.length) return null
+  const specialtyIcons: Record<string, string> = {
+    business_registration_lawyer: '🏢',
+    corporate_lawyer:             '🏢',
+    tax_consultant:               '💰',
+    contract_lawyer:              '📝',
+    ip_lawyer:                    '💡',
+    labor_lawyer:                 '👷',
+    property_lawyer:              '🏠',
+    land_lawyer:                  '🌾',
+    compliance_lawyer:            '⚖️',
+    immigration_lawyer:           '✈️',
+    criminal_lawyer:              '🔒',
+    constitutional_lawyer:        '📜',
+    civil_lawyer:                 '🏛️',
+    family_lawyer:                '👨‍👩‍👧',
+  }
+
+  function initials(name: string) {
+    return name
+      .split(' ')
+      .filter(w => /^[A-Za-z]/.test(w))
+      .slice(0, 2)
+      .map(w => w[0].toUpperCase())
+      .join('')
+  }
+
+  return (
+    <div>
+      <SectionHeader title="Suggested Lawyers" />
+      <div className="space-y-3 mt-3">
+        {lawyers.map((l) => (
+          <div
+            key={l.id}
+            className="rounded-xl border overflow-hidden"
+            style={{ borderColor: '#C8D4E8', backgroundColor: '#FFFFFF' }}
+          >
+            {/* Header row */}
+            <div className="flex items-center gap-3 p-4 pb-3" style={{ backgroundColor: '#F5F7FB' }}>
+              {/* Avatar */}
+              <div
+                className="shrink-0 w-11 h-11 rounded-full flex items-center justify-center text-[15px] font-bold"
+                style={{ backgroundColor: '#1E2E4F', color: '#EEE9DF' }}
+              >
+                {initials(l.name)}
+              </div>
+              {/* Name + location */}
+              <div className="flex-1 min-w-0">
+                <div className="text-[14px] font-semibold leading-snug" style={{ color: '#1A1A2E' }}>
+                  {l.name}
+                </div>
+                <div className="flex items-center gap-1 mt-0.5">
+                  <span className="text-[11px]">📍</span>
+                  <span className="text-[11.5px]" style={{ color: '#5C5349' }}>{l.location}</span>
+                </div>
+              </div>
+              {/* Experience badge */}
+              <div
+                className="shrink-0 text-center px-2.5 py-1.5 rounded-lg"
+                style={{ backgroundColor: '#E8ECF4' }}
+              >
+                <div className="text-[16px] font-bold leading-none" style={{ color: '#1E2E4F' }}>{l.experience}</div>
+                <div className="text-[9px] font-semibold uppercase tracking-wide mt-0.5" style={{ color: '#5C5349' }}>yrs exp</div>
+              </div>
+            </div>
+
+            {/* Specialties */}
+            <div className="px-4 pt-2.5 pb-2 flex flex-wrap gap-1.5">
+              {l.specialties.map((s) => (
+                <span
+                  key={s}
+                  className="inline-flex items-center gap-1 text-[10.5px] font-medium px-2 py-0.5 rounded-full"
+                  style={{ backgroundColor: '#E8ECF4', color: '#1E2E4F' }}
+                >
+                  <span>{specialtyIcons[s] ?? '⚖️'}</span>
+                  <span>{s.replace(/_/g, ' ')}</span>
+                </span>
+              ))}
+            </div>
+
+            {/* Bio */}
+            <div className="px-4 pb-3">
+              <p className="text-[12.5px] leading-[1.7]" style={{ color: '#5C5349' }}>
+                {l.bio}
+              </p>
+            </div>
+
+            {/* Footer: fee + languages + contact */}
+            <div
+              className="px-4 py-3 border-t flex items-center justify-between flex-wrap gap-2"
+              style={{ borderColor: '#E2D9CF', backgroundColor: '#FAF8F4' }}
+            >
+              <div className="flex items-center gap-3 flex-wrap">
+                {l.fee && (
+                  <span className="text-[12px] font-semibold" style={{ color: '#1E2E4F' }}>
+                    💵 {l.fee}
+                  </span>
+                )}
+                {l.languages?.length > 0 && (
+                  <span className="text-[11.5px]" style={{ color: '#5C5349' }}>
+                    🗣 {l.languages.join(' · ')}
+                  </span>
+                )}
+              </div>
+              <div className="flex items-center gap-2">
+                {l.phone && (
+                  <a
+                    href={`tel:${l.phone}`}
+                    className="flex items-center gap-1.5 text-[12px] font-semibold px-3 py-1.5 rounded-lg transition-opacity hover:opacity-90"
+                    style={{ backgroundColor: '#1E2E4F', color: '#EEE9DF' }}
+                  >
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor">
+                      <path d="M6.6 10.8c1.4 2.8 3.8 5.1 6.6 6.6l2.2-2.2c.3-.3.7-.4 1-.2 1.1.4 2.3.6 3.6.6.6 0 1 .4 1 1V20c0 .6-.4 1-1 1-9.4 0-17-7.6-17-17 0-.6.4-1 1-1h3.5c.6 0 1 .4 1 1 0 1.3.2 2.5.6 3.6.1.3 0 .7-.2 1L6.6 10.8z"/>
+                    </svg>
+                    Call
+                  </a>
+                )}
+                {l.email && (
+                  <a
+                    href={`mailto:${l.email}`}
+                    className="flex items-center gap-1.5 text-[12px] font-semibold px-3 py-1.5 rounded-lg border transition-colors hover:bg-gray-50"
+                    style={{ borderColor: '#C8D4E8', color: '#1E2E4F' }}
+                  >
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                      <rect x="2" y="4" width="20" height="16" rx="2"/>
+                      <path d="M2 7l10 7 10-7"/>
+                    </svg>
+                    Email
+                  </a>
+                )}
+              </div>
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  )
+}
+
 function LawyerCardsSection({ lawyers }: { lawyers: Lawyer[] }) {
   if (!lawyers?.length) return null
   const icons: Record<string, string> = {
     business_registration_lawyer: '🏢',
-    tax_consultant:                '💰',
-    contract_lawyer:               '📝',
-    ip_lawyer:                     '💡',
-    labor_lawyer:                  '👷',
-    property_lawyer:               '🏠',
-    compliance_lawyer:             '⚖️',
-    immigration_lawyer:            '✈️',
+    corporate_lawyer:             '🏢',
+    tax_consultant:               '💰',
+    contract_lawyer:              '📝',
+    ip_lawyer:                    '💡',
+    labor_lawyer:                 '👷',
+    property_lawyer:              '🏠',
+    land_lawyer:                  '🌾',
+    compliance_lawyer:            '⚖️',
+    immigration_lawyer:           '✈️',
+    criminal_lawyer:              '🔒',
+    constitutional_lawyer:        '📜',
+    civil_lawyer:                 '🏛️',
+    family_lawyer:                '👨‍👩‍👧',
   }
   return (
     <div>
@@ -518,8 +679,11 @@ export default function ScenarioRenderer({ data }: { data: ScenarioData }) {
       {/* Map entities */}
       {data.map_entities?.length > 0 && <MapEntitiesSection entities={data.map_entities} />}
 
-      {/* Lawyer cards */}
-      {data.required_lawyers?.length > 0 && <LawyerCardsSection lawyers={data.required_lawyers} />}
+      {/* Real matched lawyers from DB — shown instead of generic type cards when available */}
+      {data.matched_lawyers?.length
+        ? <MatchedLawyersSection lawyers={data.matched_lawyers} />
+        : data.required_lawyers?.length > 0 && <LawyerCardsSection lawyers={data.required_lawyers} />
+      }
 
       {/* Next actions */}
       {data.next_actions && <NextActionsSection next_actions={data.next_actions} />}

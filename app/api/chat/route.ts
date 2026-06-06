@@ -10,7 +10,6 @@ const ai = new GoogleGenAI({
 const CHAT_MODEL  = 'gemini-2.5-flash'
 const MAX_HISTORY = 10
 
-// Convert stored messages to Gemini's content format
 function toGeminiHistory(messages: { role: string; content: string }[]) {
   return messages.map((m) => ({
     role: m.role === 'assistant' ? 'model' : 'user',
@@ -39,30 +38,27 @@ export async function POST(request: NextRequest) {
     return Response.json({ error: 'Conversation not found' }, { status: 404 })
   }
 
-  // Persist user message
   await prisma.message.create({
     data: { role: 'user', content: message, conversationId },
   })
 
   const needsTitle = conversation.title === 'New Chat' || conversation.title === 'New chat'
 
-  // RAG retrieval — if embedding/DB fails, return a clean error instead of unhandled 500
-  let chunks, system, sources
+  let system: string, sources: ReturnType<typeof buildSystemPrompt>['sources']
   try {
-    chunks = await retrieveRelevantChunks(message)
+    const chunks = await retrieveRelevantChunks(message)
     ;({ system, sources } = buildSystemPrompt(chunks))
   } catch (err) {
     console.error('RAG retrieval failed:', err)
     ;({ system, sources } = buildSystemPrompt([]))
   }
 
-  // Trim history to last MAX_HISTORY messages
   const history = toGeminiHistory(conversation.messages.slice(-MAX_HISTORY))
 
   const encoder = new TextEncoder()
   let fullResponse = ''
   let streamError: string | null = null
-  let isJsonMode = false  // set true once we detect a JSON response
+  let isJsonMode = false
 
   const readable = new ReadableStream({
     async start(controller) {
@@ -70,22 +66,17 @@ export async function POST(request: NextRequest) {
         const stream = await ai.models.generateContentStream({
           model: CHAT_MODEL,
           contents: [...history, { role: 'user', parts: [{ text: message }] }],
-          config: {
-            systemInstruction: system,
-            maxOutputTokens: 8192,
-          },
+          config: { systemInstruction: system, maxOutputTokens: 8192 },
         })
 
         for await (const chunk of stream) {
           const text = chunk.candidates?.[0]?.content?.parts?.[0]?.text ?? ''
           if (text) {
             fullResponse += text
-            // Detect JSON mode on first meaningful content
             if (!isJsonMode && fullResponse.trimStart().length > 0) {
               const start = fullResponse.trimStart().slice(0, 3)
               isJsonMode = start.startsWith('{') || start.startsWith('```')
             }
-            // Only stream text to client in markdown mode
             if (!isJsonMode) {
               controller.enqueue(encoder.encode(`data: ${JSON.stringify({ text })}\n\n`))
             }
@@ -95,19 +86,15 @@ export async function POST(request: NextRequest) {
         streamError = err instanceof Error ? err.message : 'Stream error'
         controller.enqueue(encoder.encode(`data: ${JSON.stringify({ error: streamError })}\n\n`))
       } finally {
-        // Persist assistant turn
         if (fullResponse) {
           await prisma.message.create({
             data: { role: 'assistant', content: fullResponse, conversationId },
           })
         }
 
-        // Send sources
         controller.enqueue(encoder.encode(`data: ${JSON.stringify({ sources })}\n\n`))
 
-        // Try to parse fullResponse as scenario JSON.
-        // Use regex to extract the outermost {...} block — this handles code fences,
-        // trailing [TRIGGER:...] text, and Disclaimer footers the model appends.
+        // Parse scenario JSON — use regex to ignore code fences and trailing trigger codes
         let parsedAsScenario = false
         if (fullResponse) {
           const jsonMatch = fullResponse.match(/\{[\s\S]*\}/)
@@ -115,14 +102,45 @@ export async function POST(request: NextRequest) {
             try {
               const scenario = JSON.parse(jsonMatch[0])
               if (scenario && typeof scenario === 'object' && scenario.sections) {
+                // Attach real lawyers from DB — isolated so a DB error never blocks scenario rendering
+                if (Array.isArray(scenario.required_lawyers) && scenario.required_lawyers.length > 0) {
+                  try {
+                    // Fallback map: AI sometimes uses natural names not in DB schema
+                    const TYPE_MAP: Record<string, string> = {
+                      traffic_lawyer:   'civil_lawyer',
+                      transport_lawyer: 'civil_lawyer',
+                      vehicle_lawyer:   'civil_lawyer',
+                      contract_lawyer:  'corporate_lawyer',
+                      business_registration_lawyer: 'corporate_lawyer',
+                      litigation_lawyer: 'civil_lawyer',
+                      general_lawyer:   'civil_lawyer',
+                    }
+                    const types: string[] = scenario.required_lawyers
+                      .map((l: { type?: string }) => {
+                        const t = l.type?.toLowerCase().trim() ?? ''
+                        return TYPE_MAP[t] ?? t
+                      })
+                      .filter(Boolean)
+                    if (types.length > 0) {
+                      const matched = await prisma.lawyer.findMany({
+                        where: { available: true, specialties: { hasSome: types } },
+                        orderBy: { experience: 'desc' },
+                        take: 4,
+                      })
+                      if (matched.length > 0) scenario.matched_lawyers = matched
+                    }
+                  } catch (e) {
+                    console.error('Lawyer DB fetch failed:', e)
+                  }
+                }
                 controller.enqueue(encoder.encode(`data: ${JSON.stringify({ scenario })}\n\n`))
                 parsedAsScenario = true
               }
             } catch { /* not valid JSON */ }
           }
-          // If response looked like JSON but failed to parse (or no sections),
-          // send the raw text so the client has something to show instead of blank
-          if (!parsedAsScenario && fullResponse.trimStart().startsWith('{')) {
+
+          // Fallback: if response looked like JSON but failed, send as text
+          if (!parsedAsScenario && isJsonMode) {
             const stripped = fullResponse
               .replace(/^```json\s*\n?/, '').replace(/^```\s*\n?/, '')
               .replace(/\n?```\s*$/, '').trim()
@@ -130,7 +148,6 @@ export async function POST(request: NextRequest) {
           }
         }
 
-        // Run title + suggestions concurrently so both finish before stream closes
         if (fullResponse && !streamError) {
           const titleTask = needsTitle ? generateTitle(conversationId, message) : Promise.resolve()
 
@@ -138,12 +155,7 @@ export async function POST(request: NextRequest) {
             try {
               const suggRes = await ai.models.generateContent({
                 model: CHAT_MODEL,
-                contents: [{
-                  role: 'user',
-                  parts: [{ text: `Based on this legal Q&A, generate exactly 3 brief follow-up questions a Nepali user might ask next. Return ONLY a raw JSON array of 3 strings, max 9 words each. No markdown, no explanation.
-Q: ${message.slice(0, 300)}
-A: ${fullResponse.slice(0, 500)}` }],
-                }],
+                contents: [{ role: 'user', parts: [{ text: `Based on this legal Q&A, generate exactly 3 brief follow-up questions a Nepali user might ask next. Return ONLY a raw JSON array of 3 strings, max 9 words each. No markdown, no explanation.\nQ: ${message.slice(0, 300)}\nA: ${fullResponse.slice(0, 500)}` }] }],
                 config: { maxOutputTokens: 150 },
               })
               const raw = suggRes.candidates?.[0]?.content?.parts?.[0]?.text?.trim() ?? ''
@@ -154,7 +166,7 @@ A: ${fullResponse.slice(0, 500)}` }],
                   controller.enqueue(encoder.encode(`data: ${JSON.stringify({ suggestions })}\n\n`))
                 }
               }
-            } catch { /* skip suggestions on error */ }
+            } catch { /* skip */ }
           })()
 
           await Promise.allSettled([titleTask, suggestionsTask])
@@ -178,12 +190,7 @@ A: ${fullResponse.slice(0, 500)}` }],
 async function generateTitle(conversationId: string, firstMessage: string) {
   const res = await ai.models.generateContent({
     model: CHAT_MODEL,
-    contents: [{
-      role: 'user',
-      parts: [{ text: `Write a 4-6 word title for a legal chat that starts with this question.
-Reply with ONLY the title, no quotes, no punctuation at the end.
-Question: ${firstMessage.slice(0, 200)}` }],
-    }],
+    contents: [{ role: 'user', parts: [{ text: `Write a 4-6 word title for a legal chat that starts with this question.\nReply with ONLY the title, no quotes, no punctuation at the end.\nQuestion: ${firstMessage.slice(0, 200)}` }] }],
     config: { maxOutputTokens: 20 },
   })
   const title = (res.candidates?.[0]?.content?.parts?.[0]?.text ?? '').trim().slice(0, 80)

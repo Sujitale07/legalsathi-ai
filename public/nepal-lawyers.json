@@ -1,0 +1,626 @@
+[
+  {
+    "licence_no": 1,
+    "name": "राम लखन प्रसाद रौनियार",
+    "address": "वीरगंज बजार",
+    "phone": "9844380941",
+    "type": "अधिवक्ता",
+    "specializations": [
+      "Corporate Law",
+      "Criminal Law",
+      "Labour & Employment"
+    ]
+  },
+  {
+    "licence_no": 2,
+    "name": "योगेन्द्र प्रकाश मल्ल",
+    "address": "काठमाडौं, बाङ्गेमुढा",
+    "phone": "9829951708",
+    "type": "अधिवक्ता",
+    "specializations": [
+      "Criminal Law",
+      "Constitutional Law",
+      "Civil Litigation"
+    ]
+  },
+  {
+    "licence_no": 3,
+    "name": "पद्यराज विष्ट",
+    "address": "काठमाडौं, बत्तिसपुतली",
+    "phone": "9826368227",
+    "type": "अधिवक्ता",
+    "specializations": [
+      "Administrative Law",
+      "Property & Real Estate",
+      "Labour & Employment"
+    ]
+  },
+  {
+    "licence_no": 4,
+    "name": "पूर्णलाल श्रेष्ठ",
+    "address": "काठमाडौं, झोछे",
+    "phone": "9829005220",
+    "type": "अधिवक्ता",
+    "specializations": [
+      "Criminal Law",
+      "Corporate Law",
+      "Land Revenue & Tenancy"
+    ]
+  },
+  {
+    "licence_no": 5,
+    "name": "सुधाकृष्णमान सिं राजभण्डारी",
+    "address": "काठमाडौं, गुच्चाटोल",
+    "phone": "9849488094",
+    "type": "अधिवक्ता",
+    "specializations": [
+      "Constitutional Law",
+      "Civil Litigation",
+      "Labour & Employment"
+    ]
+  },
+  {
+    "licence_no": 6,
+    "name": "सरदार उपेन्द्र पुरुष ढकाल",
+    "address": "ललितपुर, कुपण्डोल",
+    "phone": "9811546343",
+    "type": "अधिवक्ता",
+    "specializations": [
+      "Administrative Law",
+      "Civil Litigation",
+      "Tax Law"
+    ]
+  },
+  {
+    "licence_no": 7,
+    "name": "कृष्ण प्रसाद शर्मा",
+    "address": "रौतहट",
+    "phone": "9827128262",
+    "type": "अधिवक्ता",
+    "specializations": [
+      "Criminal Law",
+      "Constitutional Law",
+      "Administrative Law"
+    ]
+  },
+  {
+    "licence_no": 8,
+    "name": "वनारसी महतो सुरी",
+    "address": "महोत्तरी, सवैला वीरना",
+    "phone": "9857467562",
+    "type": "अधिवक्ता",
+    "specializations": [
+      "Family & Matrimonial",
+      "Labour & Employment",
+      "Tax Law"
+    ]
+  },
+  {
+    "licence_no": 9,
+    "name": "प्रकाश बहादुर के.सी.",
+    "address": "काठमाडौं, डिल्लीबजार",
+    "phone": "9845026407",
+    "type": "अधिवक्ता",
+    "specializations": [
+      "Land Revenue & Tenancy",
+      "Property & Real Estate",
+      "Criminal Law"
+    ]
+  },
+  {
+    "licence_no": 10,
+    "name": "जनकमान श्रेष्ठ",
+    "address": "काठमाडौं, लगन दलाक्षी",
+    "phone": "9854504702",
+    "type": "अधिवक्ता",
+    "specializations": [
+      "Civil Litigation",
+      "Tax Law",
+      "Constitutional Law"
+    ]
+  },
+  {
+    "licence_no": 11,
+    "name": "मेघराज बहादुर विष्ट",
+    "address": "विराटनगर, मोरङ",
+    "phone": "9844005715",
+    "type": "अधिवक्ता",
+    "specializations": [
+      "Corporate Law",
+      "Family & Matrimonial",
+      "Criminal Law"
+    ]
+  },
+  {
+    "licence_no": 12,
+    "name": "अमृतनाथ उपाध्याय",
+    "address": "काठमाडौं, ठमेल",
+    "phone": "9826240906",
+    "type": "अधिवक्ता",
+    "specializations": [
+      "Administrative Law",
+      "Land Revenue & Tenancy",
+      "Civil Litigation"
+    ]
+  },
+  {
+    "licence_no": 13,
+    "name": "केदार कोइराला",
+    "address": "काठमाडौं, बत्तिसपुतली",
+    "phone": "9821926754",
+    "type": "अधिवक्ता",
+    "specializations": [
+      "Family & Matrimonial",
+      "Corporate Law",
+      "Civil Litigation"
+    ]
+  },
+  {
+    "licence_no": 14,
+    "name": "मोहन बहादुर श्रेष्ठ",
+    "address": "विराटनगर बजार, मोरङ",
+    "phone": "9853759981",
+    "type": "अधिवक्ता",
+    "specializations": [
+      "Land Revenue & Tenancy",
+      "Tax Law",
+      "Family & Matrimonial"
+    ]
+  },
+  {
+    "licence_no": 15,
+    "name": "शुरेन्द्र बहादुर बस्न्यात क्षेत्री",
+    "address": "काठमाडौं, पुतलीसडक",
+    "phone": "9846436856",
+    "type": "अधिवक्ता",
+    "specializations": [
+      "Civil Litigation",
+      "Constitutional Law",
+      "Criminal Law"
+    ]
+  },
+  {
+    "licence_no": "15b",
+    "name": "अजिम कुमार नाग",
+    "address": "रामापुरा बनारस, उत्तर प्रदेश",
+    "phone": "9847248548",
+    "type": "अधिवक्ता",
+    "specializations": [
+      "Labour & Employment",
+      "Property & Real Estate",
+      "Civil Litigation"
+    ]
+  },
+  {
+    "licence_no": 16,
+    "name": "गजाधर प्रसाद",
+    "address": "दक्षीन मौजा, ब्रमपुरी, रौतहट",
+    "phone": "9824614765",
+    "type": "अधिवक्ता",
+    "specializations": [
+      "Administrative Law",
+      "Tax Law",
+      "Constitutional Law"
+    ]
+  },
+  {
+    "licence_no": 17,
+    "name": "लोक जंगबहादुर शाह",
+    "address": "सटपाना, मुसिकोट, खलंगा",
+    "phone": "9809890385",
+    "type": "अधिवक्ता",
+    "specializations": [
+      "Civil Litigation",
+      "Corporate Law",
+      "Labour & Employment"
+    ]
+  },
+  {
+    "licence_no": "19a",
+    "name": "विरेन्द्र पुरुष ढकाल",
+    "address": "ललितपुर, कुपण्डोल",
+    "phone": "9861695271",
+    "type": "अधिवक्ता",
+    "specializations": [
+      "Property & Real Estate",
+      "Tax Law",
+      "Family & Matrimonial"
+    ]
+  },
+  {
+    "licence_no": "19b",
+    "name": "कुञ्ज विहारी प्रसाद सिंह",
+    "address": "जि.स.प्र. पकडी मौ कोइलाडी पौ झक्लौली",
+    "phone": "9844479355",
+    "type": "अधिवक्ता",
+    "specializations": [
+      "Administrative Law",
+      "Land Revenue & Tenancy",
+      "Labour & Employment"
+    ]
+  },
+  {
+    "licence_no": 20,
+    "name": "ज.स.करण शारदा",
+    "address": "जि.स.प्र. मौ हनुमाननगर बजार",
+    "phone": "9822778221",
+    "type": "अधिवक्ता",
+    "specializations": [
+      "Corporate Law",
+      "Constitutional Law",
+      "Administrative Law"
+    ]
+  },
+  {
+    "licence_no": 21,
+    "name": "वभु्रवाहन सिंह",
+    "address": "नेपालगंज, बाँके",
+    "phone": "9811111866",
+    "type": "अधिवक्ता",
+    "specializations": [
+      "Family & Matrimonial",
+      "Constitutional Law",
+      "Corporate Law"
+    ]
+  },
+  {
+    "licence_no": 22,
+    "name": "नीर कुमार क्षेत्री",
+    "address": "लहरे पिपल, पाल्पा",
+    "phone": "9846341385",
+    "type": "अधिवक्ता",
+    "specializations": [
+      "Labour & Employment",
+      "Family & Matrimonial",
+      "Property & Real Estate"
+    ]
+  },
+  {
+    "licence_no": 23,
+    "name": "टोप बहादुर सिंह",
+    "address": "नेपालगंज, बाँके",
+    "phone": "9844418489",
+    "type": "अधिवक्ता",
+    "specializations": [
+      "Tax Law",
+      "Property & Real Estate",
+      "Constitutional Law"
+    ]
+  },
+  {
+    "licence_no": 24,
+    "name": "ओम प्रकाश श्रीवास्तव",
+    "address": "वहराइन, भारत",
+    "phone": "9829549484",
+    "type": "अधिवक्ता",
+    "specializations": [
+      "Property & Real Estate",
+      "Land Revenue & Tenancy",
+      "Civil Litigation"
+    ]
+  },
+  {
+    "licence_no": 25,
+    "name": "ईश्वर चन्द्र सरदार",
+    "address": "जि.मो.वि.प्र. भलाभाती मौ. भलुवा",
+    "phone": "9845869487",
+    "type": "अधिवक्ता",
+    "specializations": [
+      "Constitutional Law",
+      "Land Revenue & Tenancy",
+      "Criminal Law"
+    ]
+  },
+  {
+    "licence_no": 26,
+    "name": "दीप्न प्रकाश शाह",
+    "address": "दल्लु राज्य, दैलेख",
+    "phone": "9858344836",
+    "type": "अधिवक्ता",
+    "specializations": [
+      "Constitutional Law",
+      "Land Revenue & Tenancy",
+      "Administrative Law"
+    ]
+  },
+  {
+    "licence_no": 27,
+    "name": "तुलसी प्रसाद श्रेष्ठ",
+    "address": "पूर्व ६ नं. चैनपुर, धनकुटा",
+    "phone": "9864053331",
+    "type": "अधिवक्ता",
+    "specializations": [
+      "Family & Matrimonial",
+      "Labour & Employment",
+      "Tax Law"
+    ]
+  },
+  {
+    "licence_no": 28,
+    "name": "कृष्ण प्रसाद उपाध्याय",
+    "address": "काठमाडौं, पाको पोखल डयाङ",
+    "phone": "9866181100",
+    "type": "अधिवक्ता",
+    "specializations": [
+      "Property & Real Estate",
+      "Tax Law",
+      "Land Revenue & Tenancy"
+    ]
+  },
+  {
+    "licence_no": 29,
+    "name": "जगन्नाथ प्रसाद लामिछाने",
+    "address": "काठमाडौं, ताहाचल",
+    "phone": "9813293056",
+    "type": "अधिवक्ता",
+    "specializations": [
+      "Family & Matrimonial",
+      "Labour & Employment",
+      "Tax Law"
+    ]
+  },
+  {
+    "licence_no": 30,
+    "name": "अमृतमान श्रेष्ठ",
+    "address": "काठमाडौं, पाको पोखल डयाङ",
+    "phone": "9827582827",
+    "type": "अधिवक्ता",
+    "specializations": [
+      "Tax Law",
+      "Property & Real Estate",
+      "Criminal Law"
+    ]
+  },
+  {
+    "licence_no": 31,
+    "name": "हरिराम अमात्य",
+    "address": "ललितपुर, सुनधारा",
+    "phone": "9829845217",
+    "type": "अधिवक्ता",
+    "specializations": [
+      "Land Revenue & Tenancy",
+      "Labour & Employment",
+      "Property & Real Estate"
+    ]
+  },
+  {
+    "licence_no": 32,
+    "name": "सुखदेव प्रसाद सुदी",
+    "address": "मटिहानी",
+    "phone": "9806542684",
+    "type": "अधिवक्ता",
+    "specializations": [
+      "Labour & Employment",
+      "Administrative Law",
+      "Criminal Law"
+    ]
+  },
+  {
+    "licence_no": 33,
+    "name": "प्रमोदशम्शेर राणा",
+    "address": "दाङ",
+    "phone": "9825032632",
+    "type": "अधिवक्ता",
+    "specializations": [
+      "Corporate Law",
+      "Tax Law",
+      "Criminal Law"
+    ]
+  },
+  {
+    "licence_no": 34,
+    "name": "सागर शम्सेर ज.ब.रा.",
+    "address": "काठमाडौं",
+    "phone": "9864667583",
+    "type": "अधिवक्ता",
+    "specializations": [
+      "Family & Matrimonial",
+      "Labour & Employment",
+      "Constitutional Law"
+    ]
+  },
+  {
+    "licence_no": 35,
+    "name": "सर्वज्ञरत्न सिलालीक",
+    "address": "काठमाडौं, न्यौड",
+    "phone": "9863307626",
+    "type": "अधिवक्ता",
+    "specializations": [
+      "Constitutional Law",
+      "Criminal Law",
+      "Corporate Law"
+    ]
+  },
+  {
+    "licence_no": 36,
+    "name": "गोविन्द प्रसाद प्रधान",
+    "address": "काठमाडौं, किलागल",
+    "phone": "9827017221",
+    "type": "अधिवक्ता",
+    "specializations": [
+      "Corporate Law",
+      "Labour & Employment",
+      "Property & Real Estate"
+    ]
+  },
+  {
+    "licence_no": 37,
+    "name": "मधुप्रसाद शर्मा",
+    "address": "काठमाडौं, केलटोल",
+    "phone": "9849239543",
+    "type": "अधिवक्ता",
+    "specializations": [
+      "Constitutional Law",
+      "Family & Matrimonial",
+      "Tax Law"
+    ]
+  },
+  {
+    "licence_no": 38,
+    "name": "दिनेशमान प्रधान",
+    "address": "काठमाडौं, वटु सवल बहाल",
+    "phone": "9856306027",
+    "type": "अधिवक्ता",
+    "specializations": [
+      "Administrative Law",
+      "Property & Real Estate",
+      "Labour & Employment"
+    ]
+  },
+  {
+    "licence_no": 39,
+    "name": "मोतीकाजी स्थापीत",
+    "address": "काठमाडौं, मखन",
+    "phone": "9864081436",
+    "type": "अधिवक्ता",
+    "specializations": [
+      "Corporate Law",
+      "Civil Litigation",
+      "Family & Matrimonial"
+    ]
+  },
+  {
+    "licence_no": 40,
+    "name": "कुसुम श्रेष्ठ",
+    "address": "वन्दीपुर",
+    "phone": "9853624908",
+    "type": "अधिवक्ता",
+    "specializations": [
+      "Property & Real Estate",
+      "Administrative Law",
+      "Labour & Employment"
+    ]
+  },
+  {
+    "licence_no": 41,
+    "name": "बनवारी लाल मित्तल",
+    "address": "काठमाडौं, वटु मुवहाल",
+    "phone": "9855708540",
+    "type": "अधिवक्ता",
+    "specializations": [
+      "Labour & Employment",
+      "Family & Matrimonial",
+      "Corporate Law"
+    ]
+  },
+  {
+    "licence_no": 42,
+    "name": "भगिरथ उपाध्याय",
+    "address": "जलेश्वर",
+    "phone": "9859644815",
+    "type": "अधिवक्ता",
+    "specializations": [
+      "Tax Law",
+      "Labour & Employment",
+      "Corporate Law"
+    ]
+  },
+  {
+    "licence_no": 43,
+    "name": "वासुदेव प्रसाद ढुंगाना",
+    "address": "काठमाडौं, बागबजार",
+    "phone": "9805647879",
+    "type": "अधिवक्ता",
+    "specializations": [
+      "Tax Law",
+      "Administrative Law",
+      "Civil Litigation"
+    ]
+  },
+  {
+    "licence_no": 44,
+    "name": "अनन्तभक्त श्रेष्ठ",
+    "address": "काठमाडौं, टेङ्गगल टोल",
+    "phone": "9868452655",
+    "type": "अधिवक्ता",
+    "specializations": [
+      "Labour & Employment",
+      "Criminal Law",
+      "Property & Real Estate"
+    ]
+  },
+  {
+    "licence_no": 45,
+    "name": "मोहनकृष्ण खरेल",
+    "address": "काठमाडौं, ज्ञानेश्वर",
+    "phone": "9856446704",
+    "type": "अधिवक्ता",
+    "specializations": [
+      "Corporate Law",
+      "Property & Real Estate",
+      "Land Revenue & Tenancy"
+    ]
+  },
+  {
+    "licence_no": 46,
+    "name": "नगेन्द्र प्रसाद श्रेष्ठ",
+    "address": "पाल्पा, तानसेन",
+    "phone": "9822303841",
+    "type": "अधिवक्ता",
+    "specializations": [
+      "Civil Litigation",
+      "Constitutional Law",
+      "Labour & Employment"
+    ]
+  },
+  {
+    "licence_no": 47,
+    "name": "गोविन्द बहादुर श्रेष्ठ",
+    "address": "वीतो बजार, विरगंज",
+    "phone": "9852069807",
+    "type": "अधिवक्ता",
+    "specializations": [
+      "Civil Litigation",
+      "Administrative Law",
+      "Land Revenue & Tenancy"
+    ]
+  },
+  {
+    "licence_no": "48a",
+    "name": "नगेन्द्रनाथ शर्मा",
+    "address": "काठमाडौं, डिल्लीबजार मैतिदेवी",
+    "phone": "9828717384",
+    "type": "अधिवक्ता",
+    "specializations": [
+      "Corporate Law",
+      "Administrative Law",
+      "Tax Law"
+    ]
+  },
+  {
+    "licence_no": "48b",
+    "name": "कुमार प्रसाद शर्मा",
+    "address": "काठमाडौं, नक्साल",
+    "phone": "9806184736",
+    "type": "अधिवक्ता",
+    "specializations": [
+      "Criminal Law",
+      "Tax Law",
+      "Land Revenue & Tenancy"
+    ]
+  },
+  {
+    "licence_no": 49,
+    "name": "विश्वनाथ वास्तोला",
+    "address": "मोरङ",
+    "phone": "9818051352",
+    "type": "अधिवक्ता",
+    "specializations": [
+      "Administrative Law",
+      "Labour & Employment",
+      "Tax Law"
+    ]
+  },
+  {
+    "licence_no": 50,
+    "name": "कृष्ण प्रसाद पन्त",
+    "address": "काठमाडौं, ज्ञानेश्वर",
+    "phone": "9842401914",
+    "type": "अधिवक्ता",
+    "specializations": [
+      "Corporate Law",
+      "Constitutional Law",
+      "Labour & Employment"
+    ]
+  }
+]

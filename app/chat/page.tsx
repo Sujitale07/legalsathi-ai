@@ -300,7 +300,9 @@ export default function ChatPage() {
         const res = await fetch('/api/conversations', { method: 'POST' })
         if (!res.ok) throw new Error('Failed to create conversation')
         const conv = await res.json()
-        setConversations((p) => [conv, ...p])
+        // Provisional title from the user's message — AI-generated title replaces it after stream
+        const provisionalTitle = text.length > 55 ? text.slice(0, 52).trimEnd() + '…' : text
+        setConversations((p) => [{ ...conv, title: provisionalTitle }, ...p])
         setActiveId(conv.id)
         convId = conv.id
       }
@@ -356,6 +358,8 @@ export default function ChatPage() {
               setMessageScenarios(p => ({ ...p, [aiId]: parsed.scenario }))
             } else if (parsed.suggestions) {
               setMessageSuggestions(p => ({ ...p, [aiId]: parsed.suggestions }))
+            } else if (parsed.error) {
+              setFailedMsgs(p => ({ ...p, [aiId]: parsed.error }))
             }
           } catch { /* skip malformed */ }
         }
@@ -712,13 +716,14 @@ export default function ChatPage() {
                             if (!msg.content) {
                               return <ThinkingIndicator />
                             }
-                            // Try to parse as scenario JSON (handles historical messages after reload)
-                            const trimmed = msg.content.trim()
-                              .replace(/^```json\s*\n?/, '').replace(/^```\s*\n?/, '')
-                              .replace(/\n?```\s*$/, '').trim()
-                            if (trimmed.startsWith('{')) {
+                            // Try to parse as scenario JSON (handles historical messages after reload).
+                            // Use regex to extract just the JSON object — the AI appends a Disclaimer
+                            // and [TRIGGER] code after the closing }, which breaks a naive JSON.parse.
+                            const jsonExtract = msg.content.match(/\{[\s\S]*\}/)
+                            if (jsonExtract) {
                               try {
-                                return <ScenarioRenderer data={JSON.parse(trimmed)} />
+                                const parsed = JSON.parse(jsonExtract[0])
+                                if (parsed?.sections) return <ScenarioRenderer data={parsed} />
                               } catch { /* fall through */ }
                             }
                             return <LegalResponse content={msg.content} />

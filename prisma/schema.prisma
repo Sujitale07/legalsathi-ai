@@ -42,3 +42,18 @@ model DocumentChunk {
   document    Document                    @relation(fields: [documentId], references: [id], onDelete: Cascade)
   createdAt   DateTime                    @default(now())
 }
+
+model Lawyer {
+  id           String   @id @default(cuid())
+  name         String
+  specialties  String[] // e.g. ["business_registration_lawyer", "tax_consultant"]
+  location     String
+  phone        String?
+  email        String?
+  experience   Int      // years
+  bio          String
+  languages    String[] // e.g. ["Nepali", "English"]
+  fee          String?  // e.g. "NPR 3,000 - 8,000 / hour"
+  available    Boolean  @default(true)
+  createdAt    DateTime @default(now())
+}
