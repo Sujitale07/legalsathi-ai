@@ -6,9 +6,9 @@ import { Scale, ArrowRight } from 'lucide-react'
 import { C } from './constants'
 
 const navLinks = [
-  { href: '#features',     label: 'Features' },
+  { href: '#features', label: 'Features' },
   { href: '#how-it-works', label: 'How It Works' },
-  { href: '#demo',         label: 'Demo' },
+  { href: '#demo', label: 'Demo' },
 ]
 
 export function Navbar() {

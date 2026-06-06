@@ -5,6 +5,7 @@ import Link from 'next/link'
 import LegalResponse from '@/components/LegalResponse'
 import ScenarioRenderer from '@/components/ScenarioRenderer'
 import { DOMAINS } from '@/lib/domains'
+import { VoiceAssistant } from '@/components/voice/VoiceAssistant'
 
 type Message    = { id: string; role: string; content: string; createdAt: string }
 type Conversation = { id: string; title: string; domain: string; updatedAt: string }
@@ -72,6 +73,15 @@ const IconChevronDown = () => (
 const IconChevronUp = () => (
   <svg width="12" height="12" viewBox="0 0 16 16" fill="none" className="shrink-0">
     <path d="M3 10l5-5 5 5" stroke="currentColor" strokeWidth="1.5" />
+  </svg>
+)
+
+const IconMic = () => (
+  <svg width="14" height="14" viewBox="0 0 16 16" fill="none" className="shrink-0">
+    <rect x="5" y="1" width="6" height="9" rx="3" stroke="currentColor" strokeWidth="1.4" />
+    <path d="M2 7a6 6 0 0 0 12 0" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" />
+    <line x1="8" y1="13" x2="8" y2="15" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" />
+    <line x1="5" y1="15" x2="11" y2="15" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" />
   </svg>
 )
 
@@ -169,6 +179,7 @@ export default function ChatPage() {
   const [copiedId, setCopiedId] = useState<string | null>(null)
   const [deletingIds, setDeletingIds] = useState<Set<string>>(new Set())
   const [selectedDomain, setSelectedDomain] = useState<string | null>(null)
+  const [voiceOpen, setVoiceOpen] = useState(false)
 
   const bottomRef = useRef<HTMLDivElement>(null)
   const scrollContainerRef = useRef<HTMLDivElement>(null)
@@ -261,6 +272,7 @@ export default function ChatPage() {
     setActiveId(null)
     setMessages([])
     setSelectedDomain(null)
+    setVoiceOpen(false)
     shouldScrollSmoothRef.current = false
     setTimeout(() => heroTextarea.current?.focus(), 60)
   }, [])
@@ -783,38 +795,61 @@ export default function ChatPage() {
             {/* Input */}
             <div className="px-8 pb-6 pt-4 bg-app-bg border-t border-app-border">
               <div className="max-w-[680px] mx-auto">
-                <div className={`border bg-app-surface rounded-md transition-all ${
-                  inputFocused ? 'border-app-border-strong shadow-sm' : 'border-app-border'
-                }`}>
-                  <textarea
-                    ref={activeTextarea}
-                    value={input}
-                    rows={1}
-                    placeholder="Ask a legal question…"
-                    onChange={(e) => { setInput(e.target.value); grow(e.target) }}
-                    onKeyDown={onKey}
-                    onFocus={() => setInputFocused(true)}
-                    onBlur={() => setInputFocused(false)}
-                    disabled={streaming || sending}
-                    className="w-full bg-transparent resize-none outline-none text-[13px] py-4 px-4 leading-relaxed text-app-text placeholder:text-app-text-subtle disabled:cursor-not-allowed"
-                  />
-                  <div className="flex items-center justify-between px-4 py-2.5 border-t border-app-border">
-                    <span className="text-[11px] text-app-text-subtle">
-                      {streaming || sending
-                        ? <span className="flex items-center gap-2"><ThinkingIndicator /><span>Generating response…</span></span>
-                        : 'Shift+Enter for new line'
-                      }
-                    </span>
-                    <button
-                      onClick={() => sendMessage()}
-                      disabled={streaming || sending || !input.trim()}
-                      className="flex items-center gap-1.5 px-4 py-1.5 rounded-sm text-[12px] font-medium transition-all disabled:opacity-40 cursor-pointer disabled:cursor-not-allowed"
-                      style={{ backgroundColor: '#1E2E4F', color: '#EEE9DF' }}
-                    >
-                      <IconSend /> Send
-                    </button>
+                {voiceOpen ? (
+                  /* ── Inline voice panel (replaces textarea) ── */
+                  <div className="border border-app-border bg-app-surface rounded-md p-4">
+                    <VoiceAssistant
+                      domain={activeConv?.domain ?? selectedDomain ?? 'general'}
+                      autoStart
+                      compact
+                      onClose={() => setVoiceOpen(false)}
+                    />
                   </div>
-                </div>
+                ) : (
+                  <div className={`border bg-app-surface rounded-md transition-all ${
+                    inputFocused ? 'border-app-border-strong shadow-sm' : 'border-app-border'
+                  }`}>
+                    <textarea
+                      ref={activeTextarea}
+                      value={input}
+                      rows={1}
+                      placeholder="Ask a legal question…"
+                      onChange={(e) => { setInput(e.target.value); grow(e.target) }}
+                      onKeyDown={onKey}
+                      onFocus={() => setInputFocused(true)}
+                      onBlur={() => setInputFocused(false)}
+                      disabled={streaming || sending}
+                      className="w-full bg-transparent resize-none outline-none text-[13px] py-4 px-4 leading-relaxed text-app-text placeholder:text-app-text-subtle disabled:cursor-not-allowed"
+                    />
+                    <div className="flex items-center justify-between px-4 py-2.5 border-t border-app-border">
+                      <span className="text-[11px] text-app-text-subtle">
+                        {streaming || sending
+                          ? <span className="flex items-center gap-2"><ThinkingIndicator /><span>Generating response…</span></span>
+                          : 'Shift+Enter for new line'
+                        }
+                      </span>
+                      <div className="flex items-center gap-2">
+                        <button
+                          type="button"
+                          onClick={() => setVoiceOpen(true)}
+                          disabled={streaming || sending}
+                          title="Start voice conversation"
+                          className="flex items-center gap-1.5 px-3 py-1.5 rounded-sm text-[12px] font-medium transition-all disabled:opacity-40 disabled:cursor-not-allowed border border-app-border text-app-text-subtle hover:border-[#1E2E4F] hover:text-[#1E2E4F]"
+                        >
+                          <IconMic /> Voice
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => sendMessage()}
+                          disabled={streaming || sending || !input.trim()}
+                          className="flex items-center gap-1.5 px-4 py-1.5 rounded-sm text-[12px] font-medium transition-all disabled:opacity-40 cursor-pointer disabled:cursor-not-allowed bg-[#1E2E4F] text-[#EEE9DF]"
+                        >
+                          <IconSend /> Send
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                )}
                 <p className="mt-2 text-[11px] text-app-text-subtle text-center">
                   AI guidance only — always verify important matters with a qualified lawyer
                 </p>
@@ -879,6 +914,16 @@ export default function ChatPage() {
                     </button>
                   ))}
                 </div>
+              ) : voiceOpen ? (
+                /* ── Inline voice panel (domain selected, voice active) ── */
+                <div className="border border-app-border bg-app-surface rounded-sm p-4">
+                  <VoiceAssistant
+                    domain={selectedDomain ?? 'general'}
+                    autoStart
+                    compact
+                    onClose={() => setVoiceOpen(false)}
+                  />
+                </div>
               ) : (
                 /* ── Chat input (domain selected) ── */
                 <div className={`border bg-app-surface rounded-sm transition-colors ${
@@ -898,14 +943,24 @@ export default function ChatPage() {
                   />
                   <div className="flex justify-between items-center px-5 py-3 border-t border-app-border">
                     <span className="text-[11px] text-app-text-subtle">Enter to send · Shift+Enter for new line</span>
-                    <button
-                      onClick={() => sendMessage()}
-                      disabled={streaming || sending || !input.trim()}
-                      className="flex items-center gap-2 px-4 py-1.5 rounded-sm text-[12px] font-medium transition-all disabled:opacity-40 disabled:cursor-not-allowed"
-                      style={{ backgroundColor: '#1E2E4F', color: '#EEE9DF' }}
-                    >
-                      <IconSend /> Send
-                    </button>
+                    <div className="flex items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={() => setVoiceOpen(true)}
+                        title="Start voice conversation"
+                        className="flex items-center gap-1.5 px-3 py-1.5 rounded-sm text-[12px] font-medium transition-all border border-app-border text-app-text-subtle hover:border-[#1E2E4F] hover:text-[#1E2E4F]"
+                      >
+                        <IconMic /> Voice
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => sendMessage()}
+                        disabled={streaming || sending || !input.trim()}
+                        className="flex items-center gap-2 px-4 py-1.5 rounded-sm text-[12px] font-medium transition-all disabled:opacity-40 disabled:cursor-not-allowed bg-[#1E2E4F] text-[#EEE9DF]"
+                      >
+                        <IconSend /> Send
+                      </button>
+                    </div>
                   </div>
                 </div>
               )}

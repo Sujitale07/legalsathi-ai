@@ -1,6 +1,6 @@
 import { prisma } from './prisma'
 import { generateEmbedding } from './embeddings'
-import { getDomain } from './domains'
+import { DOMAIN_MAP } from './domains'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -47,7 +47,7 @@ export async function retrieveRelevantChunks(query: string, domain: string): Pro
     JOIN   "Document"      d  ON d.id = dc."documentId"
     WHERE  dc.embedding IS NOT NULL
       AND  d.status = 'ready'
-      AND  d.domain = ${domain}
+      AND  (${domain} = 'general' OR d.domain = ${domain})
       AND  1 - (dc.embedding <=> ${vec}::vector) >= ${SIMILARITY_THRESHOLD}
     ORDER  BY dc.embedding <=> ${vec}::vector
     LIMIT  ${MAX_CHUNKS * 2}
@@ -157,8 +157,8 @@ export function buildSystemPrompt(chunks: RetrievedChunk[], domain: string): { s
     totalChunks:   c.totalChunks,
   }))
 
-  const domainConfig = getDomain(domain)
-  const domainInstructions = domainConfig?.systemInstructions ?? ''
+  const domainConfig = DOMAIN_MAP[domain] ?? DOMAIN_MAP['general']
+  const domainInstructions = domainConfig.systemInstructions ?? ''
 
   // Build the XML context block
   const contextBlock = chunks.length > 0

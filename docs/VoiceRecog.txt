@@ -1,0 +1,360 @@
+# TASK: Create Standalone Voice Assistant Route (MVP)
+
+## Goal
+
+Create a completely separate route for a Voice Assistant MVP.
+
+This route should be isolated from the existing LegalSathi features.
+
+Do NOT integrate with RAG, legal datasets, lawyer finder, or contract review yet.
+
+The goal is only:
+
+* Start voice conversation
+* Speak to Gemini
+* Receive voice responses
+* Maintain conversation context
+* Simple UI
+* Working demo
+
+---
+
+# Route Structure
+
+Create:
+
+```txt
+/app/voice/page.tsx
+```
+
+This should be accessible at:
+
+```txt
+/voice
+```
+
+---
+
+# Requirements
+
+Build a minimal Voice Assistant page similar to ChatGPT Voice Mode.
+
+Keep the UI simple.
+
+Focus on functionality.
+
+Do not spend time on animations.
+
+---
+
+# Page Layout
+
+Center everything vertically and horizontally.
+
+Structure:
+
+```txt
+----------------------------------
+Voice Assistant
+----------------------------------
+
+Session Status
+
+(Voice Orb / Mic Indicator)
+
+Start Conversation
+
+End Conversation
+
+Conversation Transcript
+
+----------------------------------
+```
+
+---
+
+# UI Components
+
+Create:
+
+```txt
+/components/voice/
+```
+
+Files:
+
+```txt
+VoiceAssistant.tsx
+VoiceButton.tsx
+SessionStatus.tsx
+ConversationTranscript.tsx
+```
+
+---
+
+# Session States
+
+Support:
+
+```ts
+type VoiceState =
+  | "idle"
+  | "connecting"
+  | "listening"
+  | "thinking"
+  | "speaking"
+  | "disconnected";
+```
+
+---
+
+# Status Display
+
+Show:
+
+Idle
+
+Connecting...
+
+Listening...
+
+Thinking...
+
+Speaking...
+
+Disconnected
+
+Make status visible at all times.
+
+---
+
+# Voice Indicator
+
+Create a simple circle.
+
+Examples:
+
+Idle:
+
+* Gray circle
+
+Listening:
+
+* Pulsing circle
+
+Thinking:
+
+* Spinner
+
+Speaking:
+
+* Animated ring
+
+Keep it simple.
+
+No complex visualizers.
+
+---
+
+# Buttons
+
+## Start Conversation
+
+When clicked:
+
+* Connect to Gemini Live API
+* Create voice session
+* Request microphone permission
+* Start listening
+
+Disable button while connected.
+
+---
+
+## End Conversation
+
+When clicked:
+
+* Disconnect Gemini session
+* Stop microphone
+* Clear buffers
+
+Disable button when not connected.
+
+---
+
+# Transcript Panel
+
+Display:
+
+User:
+Hello
+
+AI:
+Hi, how can I help you?
+
+User:
+How do I register a company?
+
+AI:
+...
+
+Store transcript only for current session.
+
+No database.
+
+No persistence.
+
+---
+
+# Gemini Live Integration
+
+Create:
+
+```txt
+/lib/voice/geminiLiveClient.ts
+```
+
+Responsibilities:
+
+* Create session
+* Connect
+* Disconnect
+* Send microphone audio
+* Receive AI audio
+* Emit transcript events
+
+Do not place UI code inside this file.
+
+---
+
+# Audio Capture
+
+Create:
+
+```txt
+/lib/voice/audioCapture.ts
+```
+
+Responsibilities:
+
+* Access microphone
+* Stream audio
+* Start recording
+* Stop recording
+
+---
+
+# Audio Playback
+
+Create:
+
+```txt
+/lib/voice/audioPlayback.ts
+```
+
+Responsibilities:
+
+* Receive Gemini audio chunks
+* Play AI voice responses
+* Prevent overlapping playback
+
+---
+
+# MVP Conversation Flow
+
+User opens:
+
+```txt
+/voice
+```
+
+User clicks:
+
+```txt
+Start Conversation
+```
+
+System:
+
+```txt
+Connects to Gemini
+↓
+Requests Microphone
+↓
+Listening
+```
+
+User speaks:
+
+```txt
+How do I register a company?
+```
+
+System:
+
+```txt
+Thinking
+↓
+Gemini generates answer
+↓
+Speaking
+```
+
+AI voice plays automatically.
+
+User asks another question.
+
+Conversation context remains active.
+
+---
+
+# Styling
+
+Use:
+
+* Tailwind CSS
+* shadcn/ui buttons
+* shadcn/ui card
+
+Theme:
+
+Minimal
+
+Professional
+
+Clean
+
+Dark mode compatible
+
+No heavy gradients.
+
+No marketing sections.
+
+This page is a utility interface only.
+
+---
+
+# Deliverables
+
+Implement:
+
+✅ /voice page
+
+✅ Session status
+
+✅ Start button
+
+✅ End button
+
+✅ Voice indicator
+
+✅ Transcript panel
+
+✅ Gemini Live connection structure
+
+✅ Audio capture layer
+
+✅ Audio playback layer
+
+The objective is a working voice conversation demo, not a polished production UI.
