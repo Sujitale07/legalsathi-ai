@@ -23,6 +23,6 @@ export async function DELETE(
   { params }: { params: Promise<{ id: string }> }
 ) {
   const { id } = await params
-  await prisma.conversation.delete({ where: { id } })
+  await prisma.conversation.deleteMany({ where: { id } })
   return new Response(null, { status: 204 })
 }
