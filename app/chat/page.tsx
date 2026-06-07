@@ -5,6 +5,7 @@ import Link from 'next/link'
 import LegalResponse from '@/components/LegalResponse'
 import ScenarioRenderer from '@/components/ScenarioRenderer'
 import { DOMAINS } from '@/lib/domains'
+import { DomainIcon } from '@/lib/domain-icons'
 import { VoiceAssistant } from '@/components/voice/VoiceAssistant'
 
 type Message    = { id: string; role: string; content: string; createdAt: string }
@@ -1061,7 +1062,7 @@ export default function ChatPage() {
                         domain.slug === 'general' ? 'col-span-2 sm:col-span-3' : ''
                       }`}
                     >
-                      <div className="text-[22px] mb-2">{domain.icon}</div>
+                      <div className="mb-3"><DomainIcon slug={domain.slug} /></div>
                       <div className="text-[13px] font-semibold text-app-text group-hover:text-[#1E2E4F] font-display mb-1">
                         {domain.label}
                       </div>
