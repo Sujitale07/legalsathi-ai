@@ -14,8 +14,14 @@ const isProtectedRoute = createRouteMatcher([
   '/api/admin(.*)',
 ])
 
+const isAuthRoute = createRouteMatcher(['/sign-in(.*)', '/sign-up(.*)'])
+
 export const proxy = clerkMiddleware(async (auth, req) => {
   const { userId, sessionClaims } = await auth()
+
+  if (isAuthRoute(req) && userId) {
+    return NextResponse.redirect(new URL('/chat', req.url))
+  }
 
   if (isProtectedRoute(req) && !userId) {
     const signInUrl = new URL('/sign-in', req.url)

@@ -7,7 +7,8 @@ const ai = new GoogleGenAI({
   apiKey: (process.env.GEMINI_API_KEY ?? process.env.GOOGLE_API_KEY)!,
 })
 
-const CHAT_MODEL  = process.env.GEMINI_MODEL ?? 'gemini-2.5-flash'
+const CHAT_MODEL      = process.env.GEMINI_MODEL ?? 'gemini-2.5-flash'
+const SECONDARY_MODEL = process.env.GEMINI_SECONDARY_MODEL ?? 'gemini-2.0-flash-lite'
 const MAX_HISTORY = 10
 
 function toGeminiHistory(messages: { role: string; content: string }[]) {
@@ -164,7 +165,7 @@ export async function POST(request: NextRequest) {
           const suggestionsTask = (async () => {
             try {
               const suggRes = await ai.models.generateContent({
-                model: CHAT_MODEL,
+                model: SECONDARY_MODEL,
                 contents: [{ role: 'user', parts: [{ text: `Based on this legal Q&A, generate exactly 3 brief follow-up questions a Nepali user might ask next. Return ONLY a raw JSON array of 3 strings, max 9 words each. No markdown, no explanation.\nQ: ${message.slice(0, 300)}\nA: ${fullResponse.slice(0, 500)}` }] }],
                 config: { maxOutputTokens: 150 },
               })
@@ -176,7 +177,7 @@ export async function POST(request: NextRequest) {
                   controller.enqueue(encoder.encode(`data: ${JSON.stringify({ suggestions })}\n\n`))
                 }
               }
-            } catch { /* skip */ }
+            } catch (err) { console.error('[suggestions]', err) }
           })()
 
           await Promise.allSettled([titleTask, suggestionsTask])
@@ -220,7 +221,7 @@ async function generateTitle(conversationId: string, firstMessage: string) {
   // Try to upgrade to an AI-generated title (best-effort — quota failures are silently ignored)
   try {
     const res = await ai.models.generateContent({
-      model: CHAT_MODEL,
+      model: SECONDARY_MODEL,
       contents: [{ role: 'user', parts: [{ text: `Write a 4-6 word title for a legal chat that starts with this question.\nReply with ONLY the title, no quotes, no punctuation at the end.\nQuestion: ${firstMessage.slice(0, 200)}` }] }],
       config: { maxOutputTokens: 20 },
     })
@@ -228,7 +229,7 @@ async function generateTitle(conversationId: string, firstMessage: string) {
     if (aiTitle) {
       await prisma.conversation.update({ where: { id: conversationId }, data: { title: aiTitle } })
     }
-  } catch {
-    // Quota exceeded or model error — fallback title already saved above, nothing to do
+  } catch (err) {
+    console.error('[title]', err)
   }
 }

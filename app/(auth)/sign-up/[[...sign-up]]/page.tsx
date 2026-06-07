@@ -1,8 +1,9 @@
 'use client'
 
-import { useSignUp } from '@clerk/nextjs'
+import { useAuth, useSignUp } from '@clerk/nextjs'
+import { useRouter } from 'next/navigation'
 import Link from 'next/link'
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 
 function GoogleIcon() {
   return (
@@ -32,20 +33,30 @@ function AlertIcon() {
 }
 
 export default function SignUpPage() {
+  const { isSignedIn } = useAuth()
+  const router = useRouter()
   const { signUp } = useSignUp()
   const [error, setError]     = useState('')
   const [loading, setLoading] = useState<'google' | 'facebook' | null>(null)
+
+  useEffect(() => {
+    if (isSignedIn) router.replace('/chat')
+  }, [isSignedIn, router])
 
   async function signUpWith(strategy: 'oauth_google' | 'oauth_facebook') {
     if (loading) return
     setError('')
     setLoading(strategy === 'oauth_google' ? 'google' : 'facebook')
     try {
-      await signUp.sso({
+      const { error } = await signUp!.sso({
         strategy,
         redirectCallbackUrl: '/sso-callback',
         redirectUrl: '/chat',
       })
+      if (error) {
+        setError(error.longMessage ?? error.message ?? 'Something went wrong. Please try again.')
+        setLoading(null)
+      }
     } catch (err: unknown) {
       const msg = (err as { errors?: { longMessage?: string; message?: string }[] })?.errors?.[0]
       setError(msg?.longMessage ?? msg?.message ?? 'Something went wrong. Please try again.')
@@ -110,6 +121,8 @@ export default function SignUpPage() {
         <a href="#">Terms of Service</a> and{' '}
         <a href="#">Privacy Policy</a>.
       </p>
+
+      <div id="clerk-captcha" />
     </div>
   )
 }

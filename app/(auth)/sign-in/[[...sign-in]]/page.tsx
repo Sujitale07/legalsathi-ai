@@ -1,8 +1,9 @@
 'use client'
 
-import { useSignIn } from '@clerk/nextjs'
+import { useAuth, useSignIn } from '@clerk/nextjs'
+import { useRouter } from 'next/navigation'
 import Link from 'next/link'
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 
 function GoogleIcon() {
   return (
@@ -32,20 +33,30 @@ function AlertIcon() {
 }
 
 export default function SignInPage() {
+  const { isSignedIn } = useAuth()
+  const router = useRouter()
   const { signIn } = useSignIn()
   const [error, setError]     = useState('')
   const [loading, setLoading] = useState<'google' | 'facebook' | null>(null)
+
+  useEffect(() => {
+    if (isSignedIn) router.replace('/chat')
+  }, [isSignedIn, router])
 
   async function signInWith(strategy: 'oauth_google' | 'oauth_facebook') {
     if (loading) return
     setError('')
     setLoading(strategy === 'oauth_google' ? 'google' : 'facebook')
     try {
-      await signIn.sso({
+      const { error } = await signIn!.sso({
         strategy,
         redirectCallbackUrl: '/sso-callback',
         redirectUrl: '/chat',
       })
+      if (error) {
+        setError(error.longMessage ?? error.message ?? 'Something went wrong. Please try again.')
+        setLoading(null)
+      }
     } catch (err: unknown) {
       const msg = (err as { errors?: { longMessage?: string; message?: string }[] })?.errors?.[0]
       setError(msg?.longMessage ?? msg?.message ?? 'Something went wrong. Please try again.')
