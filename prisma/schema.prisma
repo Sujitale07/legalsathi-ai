@@ -77,19 +77,16 @@ model IngestionLog {
 }
 
 model Lawyer {
-  id             Int      @id @default(autoincrement())
-  name           String
-  specialization String
-  experience     String
-  location       String
-  languages      String[]
-  feeRange       String
-  rating         Float
-  casesHandled   Int
-  bio            String
-  phone          String
-  email          String
-  featured       Boolean  @default(false)
-  createdAt      DateTime @default(now())
-  updatedAt      DateTime @updatedAt
+  id          String   @id @default(cuid())
+  name        String
+  experience  Int?
+  location    String
+  languages   String[]
+  fee         String?
+  bio         String
+  phone       String?
+  email       String?
+  available   Boolean  @default(true)
+  specialties String[]
+  createdAt   DateTime @default(now())
 }

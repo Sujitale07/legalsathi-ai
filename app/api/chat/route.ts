@@ -132,8 +132,8 @@ export async function POST(request: NextRequest) {
                       .filter(Boolean)
                     if (types.length > 0) {
                       const matched = await prisma.lawyer.findMany({
-                        where: { specialization: { in: types } },
-                        orderBy: { rating: 'desc' },
+                        where: { specialties: { hasSome: types } },
+                        orderBy: { experience: 'desc' },
                         take: 4,
                       })
                       if (matched.length > 0) {
