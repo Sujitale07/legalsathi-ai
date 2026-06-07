@@ -86,6 +86,7 @@ export async function POST(request: NextRequest) {
           }
         }
       } catch (err) {
+        console.error('[chat stream error]', err)
         streamError = friendlyError(err)
         controller.enqueue(encoder.encode(`data: ${JSON.stringify({ error: streamError })}\n\n`))
       } finally {

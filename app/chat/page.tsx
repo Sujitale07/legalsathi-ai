@@ -1051,26 +1051,39 @@ export default function ChatPage() {
               {!selectedDomain ? (
                 /* ── Domain card grid ── */
                 <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
-                  {DOMAINS.map((domain) => (
-                    <button
-                      key={domain.slug}
-                      onClick={() => {
-                        setSelectedDomain(domain.slug)
-                        setTimeout(() => heroTextarea.current?.focus(), 60)
-                      }}
-                      className={`text-left px-5 py-4 border border-app-border bg-app-surface hover:border-[#1E2E4F] hover:bg-app-surface-hover rounded-sm transition-all cursor-pointer group ${
-                        domain.slug === 'general' ? 'col-span-2 sm:col-span-3' : ''
-                      }`}
-                    >
-                      <div className="mb-3"><DomainIcon slug={domain.slug} /></div>
-                      <div className="text-[13px] font-semibold text-app-text group-hover:text-[#1E2E4F] font-display mb-1">
-                        {domain.label}
-                      </div>
-                      <div className="text-[11.5px] text-app-text-subtle leading-relaxed">
-                        {domain.description}
-                      </div>
-                    </button>
-                  ))}
+                  {DOMAINS.map((domain) => {
+                    const isFeatured = domain.slug === 'traffic' || domain.slug === 'taxation'
+                    return (
+                      <button
+                        key={domain.slug}
+                        onClick={() => {
+                          setSelectedDomain(domain.slug)
+                          setTimeout(() => heroTextarea.current?.focus(), 60)
+                        }}
+                        className={`relative overflow-hidden text-left px-5 py-4 border border-app-border bg-app-surface hover:border-[#1E2E4F] hover:bg-app-surface-hover rounded-sm transition-all cursor-pointer group ${
+                          domain.slug === 'general' ? 'col-span-2 sm:col-span-3' : ''
+                        }`}
+                      >
+                        {/* Corner ribbon */}
+                        <span
+                          className="absolute top-[14px] right-[-22px] w-[88px] text-center text-[8px] font-bold uppercase tracking-wider py-[3px] rotate-45 pointer-events-none"
+                          style={isFeatured
+                            ? { backgroundColor: '#F59E0B', color: '#fff' }
+                            : { backgroundColor: '#94A3B8', color: '#fff' }
+                          }
+                        >
+                          {isFeatured ? 'Featured' : 'In Progress'}
+                        </span>
+                        <div className="mb-3"><DomainIcon slug={domain.slug} /></div>
+                        <div className="text-[13px] font-semibold text-app-text group-hover:text-[#1E2E4F] font-display mb-1">
+                          {domain.label}
+                        </div>
+                        <div className="text-[11.5px] text-app-text-subtle leading-relaxed">
+                          {domain.description}
+                        </div>
+                      </button>
+                    )
+                  })}
                 </div>
               ) : voiceOpen ? (
                 /* ── Inline voice panel (domain selected, voice active) ── */

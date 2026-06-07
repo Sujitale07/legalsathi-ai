@@ -1,0 +1,559 @@
+================================================================================
+LEGALSATHI AI — QA TEST CASES
+Domains: Traffic Rules (slug: traffic) | Taxation (slug: taxation)
+Date: 2026-06-07
+Threshold: ALL marked [MUST PASS] cases must pass for QA sign-off.
+           At least 80% of [SHOULD PASS] cases must pass.
+================================================================================
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+SECTION A — TRAFFIC DOMAIN
+Domain slug: traffic
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+--- A1. CORE TRAFFIC VIOLATIONS & FINES ---
+
+TC-T-001 [MUST PASS]
+Input : "Mero bike ko helmet nalagaeko bhaneraa mama le chit diyera. Kati fine tirnu parchha?"
+Expect: Responds with fine amount for no-helmet violation.
+        Translates "mama" → Traffic Police, "chit" → Fine/Ticket.
+        Does NOT invent a fine amount without a retrieved legal source.
+        Ends with [TRIGGER: TRAFFIC] tag and disclaimer.
+
+TC-T-002 [MUST PASS]
+Input : "I was caught jumping a red light in Kathmandu. What is the penalty?"
+Expect: States the fine for signal jumping under Nepal traffic law.
+        Cites legal source or clearly states if context is unavailable.
+        No invented figure.
+        Ends with [TRIGGER: TRAFFIC] tag.
+
+TC-T-003 [MUST PASS]
+Input : "Over-speed garda police le rokyo. Ke hunchha?"
+Expect: Explains speeding penalty and procedure.
+        Does not fabricate section numbers or fine amounts.
+        Ends with [TRIGGER: TRAFFIC] tag.
+
+TC-T-004 [SHOULD PASS]
+Input : "Wrong parking ma chalan katyo. Sudhar kasari garne?"
+Expect: Explains wrong-parking fine payment and chalan clearance process.
+        Mentions Department of Transport Management (DOTM) or relevant authority.
+
+TC-T-005 [SHOULD PASS]
+Input : "Mobile chalaudai gadi chalayera caught vayem kati fine?"
+Expect: Fine for using mobile while driving (distracted driving).
+        Anti-hallucination: if amount not in context, says so explicitly.
+
+
+--- A2. DRIVING LICENSE ---
+
+TC-T-006 [MUST PASS]
+Input : "License expire vayo. Renew kasari garne?"
+Expect: Step-by-step renewal process.
+        Mentions DOTM or yatayat office.
+        States required documents.
+        Ends with [TRIGGER: TRAFFIC] tag.
+
+TC-T-007 [MUST PASS]
+Input : "Trial dina jasari prepare garne? Ke ke hunchha trial ma?"
+Expect: "Trial" correctly mapped to Practical Driving Test.
+        Describes test components (parking, road test, etc.).
+
+TC-T-008 [SHOULD PASS]
+Input : "Likhit exam fail vayo. Kati patak dina painchha?"
+Expect: "Likhit" correctly mapped to Written Driving License Exam.
+        States retry policy.
+
+TC-T-009 [SHOULD PASS]
+Input : "Foreign license use garera Nepal ma gadi chalau sakchhu?"
+Expect: Explains foreign license validity rules in Nepal.
+        Cites relevant authority.
+
+
+--- A3. VEHICLE REGISTRATION & BLUEBOOK ---
+
+TC-T-010 [MUST PASS]
+Input : "Mero gadi ko bluebook harayo. Duplicate kasari banaaune?"
+Expect: "Bluebook"/"bilbuk" correctly mapped to Vehicle Registration Certificate.
+        Process for obtaining duplicate bluebook from DOTM.
+        Required documents listed.
+        Ends with [TRIGGER: TRAFFIC] tag.
+
+TC-T-011 [MUST PASS]
+Input : "Bluebook renew garnaa paryo. Ke documents chainchha?"
+Expect: Documents and process for bluebook renewal.
+        Mentions renewal tax/token tax as applicable.
+
+TC-T-012 [SHOULD PASS]
+Input : "Gadi bikrima diye pachhi ownership transfer kasari garne?"
+Expect: Ownership/name transfer process at DOTM.
+        Mentions required docs and fees.
+
+
+--- A4. VEHICLE TAXATION & TOKEN TAX ---
+
+TC-T-013 [MUST PASS]
+Input : "Token tax tirnu paryo. Kasari tirne? Kati hunchha?"
+Expect: Explains token tax payment process.
+        Mentions deadline; does NOT invent amount if unavailable.
+        Does NOT redirect to taxation domain — this is in-scope for traffic.
+        Ends with [TRIGGER: TRAFFIC] tag.
+
+TC-T-014 [MUST PASS]
+Input : "Bluebook renewal tax kati hunchha motorcycleko?"
+Expect: Explains bluebook renewal tax for motorcycles.
+        If specific rate not in context, explicitly states cannot confirm exact amount.
+        Does NOT invent a figure.
+
+TC-T-015 [SHOULD PASS]
+Input : "Vehicle registration fee kati laagchha naya gadi register garda?"
+Expect: Registration fee range or process.
+        References relevant authority (DOTM/Transport Office).
+
+
+--- A5. ACCIDENTS & INSURANCE ---
+
+TC-T-016 [MUST PASS]
+Input : "Road accident vayo. Police call garne ki hospital jaaune pehle?"
+Expect: Practical legal guidance — immediate steps after accident.
+        Mentions police reporting obligation.
+        Ends with [TRIGGER: TRAFFIC] tag.
+
+TC-T-017 [SHOULD PASS]
+Input : "Third party insurance claim kasari garne accident pachi?"
+Expect: Insurance claim process under Nepal motor insurance rules.
+        Mentions Beema Samiti or relevant authority if applicable.
+
+TC-T-018 [SHOULD PASS]
+Input : "Hit and run accident ko case kasari file garne?"
+Expect: FIR filing process, police complaint steps.
+        Does not stray into criminal law beyond traffic-related criminal procedure.
+
+
+--- A6. DUI / DRUNK DRIVING ---
+
+TC-T-019 [MUST PASS]
+Input : "Mapase ma pakrayo. Ke penalty hunchha?"
+Expect: "Mapase" correctly mapped to Drunk Driving / DUI.
+        States penalty under Nepal traffic law.
+        Does NOT invent breathalyzer limits or fine amounts.
+        Ends with [TRIGGER: TRAFFIC] tag.
+
+TC-T-020 [SHOULD PASS]
+Input : "Drunk driving ma license cancel hunchha ki?"
+Expect: Explains license suspension/cancellation for DUI.
+        Cites legal source or flags if unavailable.
+
+
+--- A7. SLANG & LOCAL VOCABULARY MAPPING ---
+
+TC-T-021 [MUST PASS]
+Input : "Traffic mama le mero cheet liyera. K garne?"
+Expect: Correctly interprets "mama" → Traffic Police, "cheet" → Traffic Fine.
+        Provides actionable guidance on fine payment/dispute.
+
+TC-T-022 [MUST PASS]
+Input : "Yatayat office kasari pugne license banaauna?"
+Expect: "Yatayat" → DOTM.
+        Directions or process to visit DOTM for license.
+
+TC-T-023 [SHOULD PASS]
+Input : "Dalal napaiknaa gari afai bluebook renew garna milchha?"
+Expect: "Dalal" → informal broker.
+        Confirms self-service renewal is possible; gives direct process.
+
+
+--- A8. OUT-OF-SCOPE REJECTION (Traffic domain) ---
+
+TC-T-024 [MUST PASS]
+Input : "Mero divorce kasari garne?" (asked in traffic domain)
+Expect: ONLY responds with the out-of-scope message:
+        "This channel handles Traffic Rules, vehicle regulations, and related
+         vehicle taxation laws only. Please select the appropriate module
+         for other legal assistance."
+        Does NOT provide any divorce guidance.
+
+TC-T-025 [MUST PASS]
+Input : "Labor dispute — boss le salary katyo, k garne?" (asked in traffic domain)
+Expect: Out-of-scope response ONLY. No labor law guidance.
+
+TC-T-026 [MUST PASS]
+Input : "Property inherit garnu chha. Kasto document chainchha?" (asked in traffic domain)
+Expect: Out-of-scope response ONLY. No property/inheritance guidance.
+
+TC-T-027 [SHOULD PASS]
+Input : "Murder case ma lawyer chainchha" (asked in traffic domain)
+Expect: Out-of-scope response ONLY. No criminal law guidance.
+
+
+--- A9. ANTI-HALLUCINATION (Traffic domain) ---
+
+TC-T-028 [MUST PASS]
+Input : "2082 BS ko naaya traffic fine list ke ho?"
+Expect: Does NOT fabricate a specific fine list.
+        Either references retrieved context or states:
+        "I could not find a verified answer in the available transport and
+         vehicle law sources."
+
+TC-T-029 [MUST PASS]
+Input : "Section 45B bhaneraa traffic act ma chha? Kasto penalty gareko chha?"
+Expect: Does NOT confirm or invent Section 45B.
+        States cannot verify without retrieved context.
+
+TC-T-030 [MUST PASS]
+Input : "Motorcycle ko token tax NPR 2,000 ho ki?" (a user supplying a wrong/leading figure)
+Expect: Does NOT simply confirm the user's figure.
+        Either cites verified amount or says it cannot confirm.
+
+
+--- A10. RESPONSE FORMAT (Traffic) ---
+
+TC-T-031 [MUST PASS]
+Input : Any valid traffic question.
+Expect: Every response ends with:
+        [TRIGGER: TRAFFIC]
+        followed by the standard disclaimer about Nepalese Transport Guidelines.
+
+TC-T-032 [SHOULD PASS]
+Input : "Ghumti ma accident vayo. Ke niyam chha?"
+Expect: "Ghumti" understood as sharp road bend.
+        Relevant safety/liability guidance provided.
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+SECTION B — TAXATION DOMAIN
+Domain slug: taxation
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+--- B1. INCOME TAX SLABS ---
+
+TC-X-001 [MUST PASS]
+Input : "My annual salary is NPR 8,00,000. How much income tax do I pay?"
+Expect: Applies correct FY 2081/82 slabs:
+          0% on first 5,00,000
+          10% on 5,00,001–7,00,000 = NPR 20,000
+          20% on 7,00,001–8,00,000 = NPR 20,000
+          Total = NPR 40,000
+        Cites Income Tax Act 2058, Schedule 1 and fiscal year.
+        Ends with [RECOMMEND: TAX_EXPERT_CA] and disclaimer.
+
+TC-X-002 [MUST PASS]
+Input : "What is the income tax rate for a couple earning NPR 5,50,000 combined?"
+Expect: States couple threshold is NPR 6,00,000 at 0%.
+        NPR 5,50,000 falls below threshold → 0% tax.
+        Cites correct fiscal year.
+
+TC-X-003 [MUST PASS]
+Input : "Corporate tax rate kati ho Nepal ma?"
+Expect: 25% standard; 20% manufacturing/hydropower/export; 1% cooperatives; 15% SEZ.
+        Cites Income Tax Act 2058, Schedule 1.
+        Ends with [RECOMMEND: TAX_EXPERT_CA].
+
+TC-X-004 [SHOULD PASS]
+Input : "Ek person ko 30 lakh salary chha. Total income tax kati hunchha?"
+Expect: Correct slab calculation:
+          0% → 5L, 10% → 2L (NPR 20k), 20% → 13L (NPR 2.6L), 30% → 10L (NPR 3L)
+          Total ≈ NPR 5,80,000
+        Cites act and fiscal year.
+
+
+--- B2. TDS (TAX DEDUCTED AT SOURCE) ---
+
+TC-X-005 [MUST PASS]
+Input : "Employer le mero salary baata TDS kata garchha? Kasto rate?"
+Expect: Employer deducts TDS monthly at applicable slab rate.
+        Cites ITA Section 87.
+        Ends with [RECOMMEND: TAX_EXPERT_CA].
+
+TC-X-006 [MUST PASS]
+Input : "Office space rent diye ma TDS katnu parchha?"
+Expect: TDS on rent: 10% if recipient is an entity; 5% for individuals.
+        Cites ITA Section 88(2).
+
+TC-X-007 [SHOULD PASS]
+Input : "Consultant lai payment garda kati TDS kataune?"
+Expect: 15% TDS on professional/consulting fees.
+        Cites ITA Section 88.
+
+
+--- B3. VAT ---
+
+TC-X-008 [MUST PASS]
+Input : "VAT registration kab garnu parchha? Kasto threshold ho?"
+Expect: VAT registration mandatory when annual turnover exceeds NPR 50 lakh.
+        Cites VAT Act 2052, Section 10.
+        Ends with [RECOMMEND: TAX_EXPERT_CA].
+
+TC-X-009 [MUST PASS]
+Input : "VAT rate Nepal ma kati percent ho?"
+Expect: 13% standard rate.
+        Mentions zero-rated items (exports, certain food).
+        Cites VAT Act 2052, Section 5.
+
+TC-X-010 [MUST PASS]
+Input : "VAT return file garne deadline kati ho?"
+Expect: Monthly VAT-03 filing due by 25th of following month.
+        Quarterly option available below NPR 1 crore/quarter.
+        Cites VAT Act and IRD guidelines.
+
+TC-X-011 [SHOULD PASS]
+Input : "VAT refund kasari claim garne?"
+Expect: Process for claiming VAT refund at IRD.
+        Mentions Form VAT-01 or relevant form.
+
+
+--- B4. PAN REGISTRATION ---
+
+TC-X-012 [MUST PASS]
+Input : "PAN card kasari banaauney? Ke documents chainchha?"
+Expect: Application online at ird.gov.np or in person at IRD.
+        Documents: citizenship, passport photo, address proof.
+        Processing time: 1–3 working days.
+        Ends with [RECOMMEND: TAX_EXPERT_CA].
+
+TC-X-013 [SHOULD PASS]
+Input : "PAN mandatory chha ki for freelancers?"
+Expect: PAN mandatory for all income earners.
+        Explains online registration process.
+
+
+--- B5. CAPITAL GAINS TAX ---
+
+TC-X-014 [MUST PASS]
+Input : "NEPSE shares bechda kati tax tirnu parchha?"
+Expect: "Share ko tax / Nepse tax" correctly understood.
+        5% for individual holding >1 year; 7.5% for <1 year.
+        Cites ITA Schedule 1, as amended by Economic Act 2080, and fiscal year.
+        Ends with [RECOMMEND: TAX_EXPERT_CA].
+
+TC-X-015 [MUST PASS]
+Input : "Jagga bechda capital gains tax kati hunchha?"
+Expect: "Jagga pass ko tax" → Real Estate Capital Gains Tax.
+        Individual: 5% (>5 years), 10% (<5 years); Corporate: 15%.
+        Cites ITA Schedule 1.
+
+TC-X-016 [SHOULD PASS]
+Input : "I bought a plot in 2015 and sold it this year. What CGT do I pay?"
+Expect: Held >5 years → 5% for individual.
+        Cites correct act and fiscal year.
+
+
+--- B6. FILING DEADLINES & ADVANCE TAX ---
+
+TC-X-017 [MUST PASS]
+Input : "Income tax return kab samma file garne?"
+Expect: Individuals: by Poush end (mid-January).
+        Corporate: by Ashad end (mid-July).
+        Extension possible on application.
+        Cites Income Tax Act 2058.
+
+TC-X-018 [MUST PASS]
+Input : "Advance tax kab tirnu parchha? Kasto condition ma?"
+Expect: Payable if annual liability exceeds NPR 7,500.
+        3 instalments: Poush, Chaitra, Ashad.
+        Cites ITA Section 94.
+        "Dharauli" vocabulary accepted as advance tax.
+
+TC-X-019 [SHOULD PASS]
+Input : "Late tax filing ma kati penalty laagchha?"
+Expect: NPR 100/day up to 60 days, then 0.1% of tax liability per day.
+        Cites ITA Section 117.
+
+
+--- B7. TAX CLEARANCE CERTIFICATE ---
+
+TC-X-020 [MUST PASS]
+Input : "Foreign employment jaan tax clearance chainchha. Kasari linchhau?"
+Expect: Tax clearance required for foreign employment.
+        Apply at IRD; processing 3–7 days.
+        Ends with [RECOMMEND: TAX_EXPERT_CA].
+
+TC-X-021 [SHOULD PASS]
+Input : "Company close garda tax clearance kasto process ho?"
+Expect: Clearance from IRD required on company closure.
+        Process and timeline explained.
+
+
+--- B8. LOCAL VOCABULARY MAPPING (Taxation) ---
+
+TC-X-022 [MUST PASS]
+Input : "SSF ma kati percent contribute garnuparchha?"
+Expect: "SSF" → Social Security Fund.
+        Employer 20% + Employee 11% of basic salary.
+        Cites Social Security Act 2075 or ITA.
+
+TC-X-023 [MUST PASS]
+Input : "Pathao chalaudai chhu — mero tax obligation k chha?"
+Expect: "Pathao tax" → ride-sharing VAT and income tax obligations.
+        Explains VAT if turnover >50L, income tax on earnings.
+        Ends with [RECOMMEND: TAX_EXPERT_CA].
+
+TC-X-024 [SHOULD PASS]
+Input : "Malpot kati tirnu parchha Kathmandu ma?"
+Expect: "Malpot" → Annual Land Revenue Tax.
+        Explains how to check/pay at Land Revenue Office.
+
+TC-X-025 [SHOULD PASS]
+Input : "Green Tax ke ho gaadima?"
+Expect: "Green Tax" → Environmental/road infrastructure levy on vehicles.
+        Brief explanation provided.
+
+
+--- B9. OUT-OF-SCOPE REJECTION (Taxation domain) ---
+
+TC-X-026 [MUST PASS]
+Input : "Traffic fine tirnu chha. Kasari tirne?" (asked in taxation domain)
+Expect: ONLY responds with out-of-scope message:
+        "This channel handles taxation and financial obligations only.
+         Please select the appropriate domain for other legal assistance."
+        Does NOT provide traffic guidance.
+
+TC-X-027 [MUST PASS]
+Input : "Divorce case kasari daiyer garne?" (asked in taxation domain)
+Expect: Out-of-scope response ONLY.
+
+TC-X-028 [MUST PASS]
+Input : "Mero boss le salary katyo — k garne?" (asked in taxation domain)
+Expect: Out-of-scope response ONLY (employment dispute, not taxation).
+
+TC-X-029 [SHOULD PASS]
+Input : "Criminal case chha malai." (asked in taxation domain)
+Expect: Out-of-scope response ONLY.
+
+
+--- B10. ANTI-HALLUCINATION (Taxation domain) ---
+
+TC-X-030 [MUST PASS]
+Input : "FY 2082/83 ko income tax slab ke ho?" (future/unknown fiscal year)
+Expect: Does NOT fabricate future slabs.
+        States rates are for FY 2081/82 and advises checking budget announcement or IRD.
+        "Rates may change with annual budget."
+
+TC-X-031 [MUST PASS]
+Input : "GST rate Nepal ma kati chha?"
+Expect: Does NOT invent a GST rate — Nepal uses VAT, not GST.
+        Clarifies Nepal uses 13% VAT under VAT Act 2052.
+
+TC-X-032 [MUST PASS]
+Input : "Section 200 Income Tax Act bata mero case ma chha — ke hunchha?"
+Expect: Does NOT fabricate Section 200 content.
+        States cannot verify without retrieved context; recommends CA.
+
+TC-X-033 [SHOULD PASS]
+Input : "Crypto gains ma kati tax laagchha Nepal ma?"
+Expect: Acknowledges the gap — crypto taxation not clearly defined in retrieved law.
+        Does NOT invent a rate.
+        Recommends consulting a CA or IRD directly.
+        Ends with [RECOMMEND: TAX_EXPERT_CA].
+
+
+--- B11. RESPONSE FORMAT (Taxation) ---
+
+TC-X-034 [MUST PASS]
+Input : Any valid taxation question.
+Expect: Every response ends with:
+        [RECOMMEND: TAX_EXPERT_CA]
+        followed by standard disclaimer about Nepalese Tax Legislation and CA consultation.
+
+TC-X-035 [MUST PASS]
+Input : Any taxation question where a rate is stated.
+Expect: Rate is always accompanied by:
+        - The specific Act and Section number
+        - The fiscal year (FY 2081/82 BS or equivalent)
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+SECTION C — CROSS-DOMAIN BOUNDARY CASES
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+TC-CB-001 [MUST PASS]
+Input : "Vehicle ko green tax tirnu paryo — kahan tirne?" (taxation domain)
+Expect: Green Tax is vehicle-related; taxation domain may handle or redirect to traffic.
+        Either: explains green tax payment process, OR
+        redirects cleanly to traffic domain — no confusing mixed response.
+
+TC-CB-002 [MUST PASS]
+Input : "Token tax ra vehicle registration fee — duitai traffic domain ma parcha?" (traffic domain)
+Expect: BOTH are in-scope for traffic domain.
+        Handles without redirecting to taxation domain.
+        Ends with [TRIGGER: TRAFFIC].
+
+TC-CB-003 [SHOULD PASS]
+Input : "Pathao driver hhu. Income tax tirnu parchha ki? Bike ko token tax kati ho?"
+        (Asked in traffic domain)
+Expect: Token tax portion answered.
+        Income tax portion either addressed at high level or redirected to taxation domain
+        with a clear note — no silent omission.
+
+TC-CB-004 [SHOULD PASS]
+Input : "Mero company ko corporate tax ra vehicle fleet ko token tax — duitai bujhna chhaun."
+        (Asked in taxation domain)
+Expect: Corporate tax answered in-domain.
+        Vehicle token tax either addressed (as it overlaps) or cleanly directed to traffic domain.
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+SECTION D — API / SYSTEM-LEVEL TESTS
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+TC-SYS-001 [MUST PASS]
+Test   : POST /api/chat with missing conversationId
+Expect : HTTP 400 — { error: "conversationId and message are required" }
+
+TC-SYS-002 [MUST PASS]
+Test   : POST /api/chat with missing message field
+Expect : HTTP 400 — { error: "conversationId and message are required" }
+
+TC-SYS-003 [MUST PASS]
+Test   : POST /api/chat with invalid JSON body
+Expect : HTTP 400 — { error: "Invalid JSON" }
+
+TC-SYS-004 [MUST PASS]
+Test   : POST /api/chat with a non-existent conversationId
+Expect : HTTP 404 — { error: "Conversation not found" }
+
+TC-SYS-005 [MUST PASS]
+Test   : POST /api/chat with valid payload (traffic domain conversation)
+Expect : SSE stream starts; receives at least one "data: {...text...}" event.
+         Stream ends with "data: [DONE]".
+
+TC-SYS-006 [MUST PASS]
+Test   : POST /api/chat with valid payload (taxation domain conversation)
+Expect : SSE stream starts; receives at least one "data: {...text...}" event.
+         Stream ends with "data: [DONE]".
+         sources event is present in stream.
+
+TC-SYS-007 [SHOULD PASS]
+Test   : POST /api/chat with a very long message (>5000 chars)
+Expect : System handles without 500 error; response is valid SSE or graceful error event.
+
+TC-SYS-008 [SHOULD PASS]
+Test   : SSE stream includes a "suggestions" event with 3 follow-up question strings.
+         Each suggestion is max 9 words.
+
+TC-SYS-009 [SHOULD PASS]
+Test   : Conversation title updates from "New Chat" to a meaningful AI-generated title
+         after the first message in a traffic domain conversation.
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+PASS / FAIL SCORING GUIDE
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+MUST PASS cases  : 0 failures allowed for QA sign-off.
+SHOULD PASS cases: Max 20% failures allowed (round down).
+
+Total MUST PASS  : 30 cases
+Total SHOULD PASS: 22 cases
+
+QA SIGN-OFF THRESHOLD:
+  - All 30 MUST PASS cases → PASS
+  - At least 18 of 22 SHOULD PASS cases → PASS
+  → Both conditions must be met for domain QA to be marked GREEN.
+
+Fail any MUST PASS → QA = RED (block release)
+Fail >4 SHOULD PASS → QA = YELLOW (flag for review before release)
+
+================================================================================
+END OF TEST CASES
+================================================================================
