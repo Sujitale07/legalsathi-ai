@@ -177,26 +177,32 @@ export default function IngestPage() {
       if (currentProcessing.length === 0) return
 
       try {
-        const updates = await Promise.all(
-          currentProcessing.map(d =>
-            fetch(`/api/documents/${d.id}`)
-              .then(res => (res.ok ? res.json() : null))
-              .catch(() => null)
-          )
+        const results = await Promise.all(
+          currentProcessing.map(async d => {
+            const res = await fetch(`/api/documents/${d.id}`).catch(() => null)
+            if (!res) return { id: d.id, data: null, missing: false }
+            if (res.status === 404) return { id: d.id, data: null, missing: true }
+            return { id: d.id, data: res.ok ? await res.json() : null, missing: false }
+          })
         )
 
+        const missingIds = new Set(results.filter(r => r.missing).map(r => r.id))
+
         setDocuments(prev =>
-          prev.map(d => {
-            const update = updates.find((u): u is DocumentDetail => !!u && u.id === d.id)
-            if (update) {
-              return {
-                ...d,
-                status: update.status,
-                _count: { chunks: update._count?.chunks ?? 0 }
+          prev
+            .filter(d => !missingIds.has(d.id))
+            .map(d => {
+              const result = results.find(r => r.id === d.id)
+              const update = result?.data as DocumentDetail | null
+              if (update) {
+                return {
+                  ...d,
+                  status: update.status,
+                  _count: { chunks: update._count?.chunks ?? 0 }
+                }
               }
-            }
-            return d
-          })
+              return d
+            })
         )
       } catch (err) {
         console.error('Polling error', err)
