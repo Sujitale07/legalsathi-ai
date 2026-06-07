@@ -433,6 +433,286 @@ table(
   ]
 )
 
+// ─── RAG Terminology Deep Dive ───────────────────────────────────────────────
+h1('5A  RAG Terminology — Deep Dive')
+
+body(
+  'This section explains every technical term used in the RAG pipeline from first principles, ' +
+  'so any reader can understand how retrieval-augmented generation works in LegalSathi.'
+)
+
+h2('What is RAG?')
+body(
+  'Retrieval-Augmented Generation (RAG) is an architecture that combines a search engine with a language model. ' +
+  'Instead of relying solely on what the LLM learned during training, RAG fetches real documents at query time ' +
+  'and injects them into the prompt. The model then answers using that retrieved evidence rather than memory alone. ' +
+  'In LegalSathi, the "documents" are chunks of Nepalese legal statutes, rules, and guidelines stored in PostgreSQL.'
+)
+code(
+`WITHOUT RAG:  User question → LLM (training knowledge only) → Answer
+WITH RAG:     User question → Search (fetch relevant statute chunks)
+                            → LLM (question + fetched chunks) → Cited Answer`
+)
+
+h2('Embeddings & Vector Space')
+body(
+  'An embedding is a list of numbers (a vector) that represents the meaning of a piece of text. ' +
+  'Similar meanings produce vectors that are numerically close to each other in high-dimensional space. ' +
+  'LegalSathi uses Google\'s gemini-embedding-2 model to produce 768-dimensional embeddings — each chunk of ' +
+  'legal text becomes a point in 768-dimensional space.'
+)
+bullet([
+  'Embedding dimension: 768 — each document chunk is represented by exactly 768 float numbers.',
+  'Training: Gemini embedding model is trained on massive corpora so "fine" and "penalty" are near each other.',
+  'Stored in: PostgreSQL column of type vector(768) via the pgvector extension.',
+  'Generated once per chunk at ingest time; generated fresh per query at query time.',
+])
+note(
+  'Why 768 dimensions? Gemini embedding-2 uses 768 as its output size. More dimensions = finer meaning resolution, ' +
+  'but more storage and slower distance computation. 768 is the standard BERT-class size — a proven tradeoff.'
+)
+
+h2('Cosine Similarity')
+body(
+  'Cosine similarity measures how similar two vectors are by computing the cosine of the angle between them. ' +
+  'A value of 1.0 means the vectors point in exactly the same direction (identical meaning). ' +
+  'A value of 0.0 means they are perpendicular (completely unrelated). ' +
+  'Negative values mean opposite meanings (rare in embedding models).'
+)
+code(
+`cosine_similarity(A, B) = (A · B) / (|A| × |B|)
+
+                         = sum(A_i × B_i)
+                           ─────────────────────────────
+                           sqrt(sum(A_i²)) × sqrt(sum(B_i²))
+
+Range:  -1.0  (opposite)  →  0.0  (unrelated)  →  1.0  (identical)`
+)
+body(
+  'pgvector exposes this as the <=> operator which computes cosine DISTANCE = 1 - cosine_similarity. ' +
+  'So lower <=> values = more similar. LegalSathi converts back: similarity = 1 - distance, ' +
+  'and filters out anything below 0.45 (less than 45% similar to the query).'
+)
+table(
+  ['Similarity Score', 'Meaning', 'LegalSathi Action'],
+  [
+    ['0.9 – 1.0', 'Extremely close semantic match', 'Top-ranked; always included'],
+    ['0.7 – 0.9', 'Strong topical match', 'High priority in RRF merge'],
+    ['0.45 – 0.7', 'Moderate relevance', 'Included if within chunk budget'],
+    ['< 0.45', 'Weak or unrelated', 'Filtered out before RRF'],
+  ]
+)
+
+h2('BM25 — Best Match 25')
+body(
+  'BM25 (Best Match 25) is a classical probabilistic ranking algorithm for full-text search. ' +
+  'It scores documents based on how many times query terms appear, weighted by how rare those terms are ' +
+  'across the corpus (IDF — Inverse Document Frequency) and normalized for document length.'
+)
+code(
+`BM25 score for term t in document d:
+
+  score(d, t) = IDF(t) × [ TF(t,d) × (k1 + 1) ]
+                            ─────────────────────────────────
+                            [ TF(t,d) + k1 × (1 - b + b × |d|/avgDL) ]
+
+Where:
+  TF(t,d)   = term frequency (how many times t appears in d)
+  IDF(t)    = log((N - df + 0.5) / (df + 0.5) + 1)
+              N = total docs, df = docs containing t
+  k1        = saturation param (typically 1.2 – 2.0)
+  b         = length normalization param (typically 0.75)
+  |d|/avgDL = ratio of document length to average doc length`
+)
+body(
+  'In PostgreSQL, BM25-like scoring is approximated using ts_rank_cd() on tsvector columns. ' +
+  'LegalSathi creates a tsvector from each chunk\'s content using the "simple" dictionary ' +
+  '(no stemming, preserves Nepali/legal terms exactly), then ranks matches with ts_rank_cd().'
+)
+note(
+  'Why not pure BM25? BM25 is great for keyword overlap (exact statute section numbers, legal terms) ' +
+  'but fails for paraphrase ("can I be fired?" vs "wrongful termination"). ' +
+  'Cosine similarity handles paraphrase but can miss exact keyword matches. ' +
+  'Combining both captures the strengths of each.'
+)
+
+h2('Vector Search vs Full-Text Search — Comparison')
+table(
+  ['Aspect', 'Vector (Cosine)', 'Full-Text (BM25-style)'],
+  [
+    ['Matches', 'Semantic meaning / paraphrase', 'Exact keywords and legal terms'],
+    ['Strength', '"How do I divorce?" finds "divorce procedure"', '"Section 94" finds "Section 94"'],
+    ['Weakness', 'Can miss exact statute numbers', 'Cannot handle paraphrase or synonyms'],
+    ['Query type', 'Dense (768-float query vector)', 'Sparse (keyword tokens)'],
+    ['Speed', 'ANN index scan (pgvector)', 'Inverted index (GIN index on tsvector)'],
+    ['Score scale', '0.0 – 1.0 (cosine similarity)', 'Unbounded float (ts_rank_cd)'],
+  ]
+)
+
+h2('Reciprocal Rank Fusion (RRF)')
+body(
+  'RRF is a rank-based fusion algorithm that merges two (or more) ranked lists into a single combined ranking. ' +
+  'It was introduced by Cormack, Clarke, and Buettcher in 2009 and has become the standard for hybrid search. ' +
+  'The key insight: instead of trying to normalize incompatible score scales (cosine vs BM25), ' +
+  'RRF only uses the RANK position of each document in each list.'
+)
+code(
+`For each document d that appears in any ranked list:
+
+  RRF_score(d) = sum over each list L of:  1 / (k + rank_L(d))
+
+In LegalSathi (k = 60, two lists):
+
+  RRF_score(chunk) =   1          +       1
+                     ─────────────    ─────────────
+                     60 + rank_vec    60 + rank_fts
+
+  rank_vec = position in cosine similarity ranking (1 = most similar)
+  rank_fts = position in BM25/ts_rank_cd ranking (1 = highest keyword score)
+  k = 60     prevents top-ranked items from dominating too heavily`
+)
+body(
+  'A chunk that appears at rank 1 in cosine search contributes 1/(60+1) = 0.0164. ' +
+  'At rank 10 it contributes 1/(60+10) = 0.0143. The difference shrinks quickly — ' +
+  'this is why k=60 is "soft": a rank-1 result is important but doesn\'t completely drown out rank-2. ' +
+  'Chunks absent from one list get no contribution from that list (treated as if rank=∞).'
+)
+
+h3('Why k = 60?')
+body(
+  'The original RRF paper empirically found k=60 to be robust across many retrieval tasks. ' +
+  'Smaller k (e.g. k=1) makes the formula very aggressive — rank 1 scores much higher than rank 2. ' +
+  'Larger k (e.g. k=1000) flattens all ranks toward equal weight, losing ordering signal. ' +
+  'k=60 is the standard choice adopted across most production hybrid search systems.'
+)
+
+h2('Hybrid Search — Why Both?')
+body('Consider this real LegalSathi query: "mapase fine katiko cha" (how much is the DUI fine?)')
+table(
+  ['Search Type', 'What It Finds', 'Score'],
+  [
+    ['Cosine (vector)', 'Chunks about drunk driving penalties (semantic match)', 'High'],
+    ['BM25 (FTS)', 'Chunks containing the exact phrase "mapase" or "fine"', 'High'],
+    ['Cosine only (no BM25)', 'Misses chunks that just list fine amounts (low semantic density)', 'Lower'],
+    ['BM25 only (no vector)', 'Misses chunks that say "DUI" or "alcohol violation" instead', 'Lower'],
+    ['RRF combined', 'Gets both — statute text + penalty table', 'Best'],
+  ]
+)
+
+h2('Embeddings in LegalSathi — End-to-End')
+body('Here is the complete lifecycle of an embedding in the system:')
+code(
+`INGEST TIME:
+  Document text
+    → chunkText()        → ["chunk 1 text", "chunk 2 text", ...]
+    → generateEmbeddingsBatch(chunks)
+       → Gemini embedding-2 API  (50 chunks per call)
+       → [[0.12, -0.04, 0.87, ... 768 floats], ...]
+    → INSERT INTO DocumentChunk (content, embedding)
+       → stored as PostgreSQL vector(768)
+
+QUERY TIME:
+  User query:  "DUI fine Nepal"
+    → Query expansion:  "Nepal motor vehicle traffic law DUI fine सवारी ..."
+    → generateEmbedding(expandedQuery)
+       → Gemini embedding-2 API  (single call)
+       → [0.09, -0.01, 0.91, ... 768 floats]
+    → pgvector:  ORDER BY embedding <=> queryVector
+       → returns top chunks sorted by cosine distance`
+)
+
+h2('Cross-Domain Retrieval')
+body(
+  'A single query may span multiple legal domains. LegalSathi detects this with regex signal patterns ' +
+  'and runs retrieval in parallel across up to 3 domains, then interleaves results (primary domain first).'
+)
+code(
+`Query: "bike chalau fine tireko thiyo, VAT rakha ra?"
+       (I paid a traffic fine, do I keep the VAT receipt?)
+
+Domain signals detected:
+  → traffic  (fine, bike)
+  → taxation (VAT, receipt)
+
+Parallel retrieval:
+  traffic domain  → vector search + BM25 → top 6 chunks → RRF list A
+  taxation domain → vector search + BM25 → top 6 chunks → RRF list B
+
+Interleave:
+  [traffic#1, taxation#1, traffic#2, taxation#2, ...]  → first 6 fit budget`
+)
+
+h2('Chunking & Overlap — Why It Matters')
+body(
+  'Legal text often has context that spans paragraph boundaries. A section header and its first clause ' +
+  'may be in different chunks if split naively. LegalSathi uses a 2-sentence overlap to mitigate this:'
+)
+code(
+`Chunk 1:  "Section 94. Divorce by mutual consent. Either spouse may..."
+           "...file a petition jointly at the District Court."    ← overlap →
+
+Chunk 2:  "...file a petition jointly at the District Court."    ← carried over
+           "Section 95. Contested divorce. Grounds include..."
+           "...mental illness, cruelty, abandonment for 3 years."`
+)
+body(
+  'Without overlap, a query about filing a divorce petition might only match Chunk 2 (which contains "file a petition") ' +
+  'but miss that it requires joint filing. The overlap ensures that critical cross-boundary context is duplicated ' +
+  'into adjacent chunks.'
+)
+
+h2('tsvector & plainto_tsquery — PostgreSQL FTS')
+body(
+  'PostgreSQL\'s full-text search stores pre-processed text as a tsvector (a sorted, de-duplicated list of lexemes). ' +
+  'At query time, plainto_tsquery converts the user\'s query into a tsquery (ANDed terms by default). ' +
+  'ts_rank_cd() then scores each matching tsvector by term frequency and proximity.'
+)
+code(
+`-- What LegalSathi stores per chunk:
+to_tsvector('simple', content)
+-- 'simple' dictionary: no stemming, lowercase only
+-- Preserves: "Section", "94", "NPR", "VAT", "lalpurja" exactly
+
+-- At query time:
+plainto_tsquery('simple', 'divorce mutual consent')
+-- produces: 'divorce' & 'mutual' & 'consent'
+
+-- Ranking:
+ts_rank_cd(tsvector_col, query)
+-- cd = cover density: rewards chunks where query terms appear close together`
+)
+note(
+  'Why "simple" dictionary and not "english"? The "english" dictionary applies stemming ' +
+  '(removes → remov, filing → file) which would corrupt Nepali words, section numbers, and legal terms ' +
+  'like "lalpurja", "malpot", "IRD". The "simple" dictionary only lowercases, preserving all tokens exactly.'
+)
+
+h2('Summary — RAG Term Glossary')
+table(
+  ['Term', 'One-Line Definition'],
+  [
+    ['RAG', 'Fetch relevant docs first; give them to the LLM as context'],
+    ['Embedding', 'List of numbers (vector) representing text meaning'],
+    ['Vector space', '768-dimensional coordinate system where meaning = proximity'],
+    ['Cosine similarity', 'Angle between two vectors; 1.0 = same meaning, 0.0 = unrelated'],
+    ['pgvector', 'PostgreSQL extension that stores and queries vectors natively'],
+    ['<=> operator', 'pgvector cosine distance: 0.0 = identical, 2.0 = opposite'],
+    ['BM25', 'Keyword ranking by term freq × rarity; foundation of full-text search'],
+    ['tsvector', 'PostgreSQL\'s preprocessed token list for fast full-text search'],
+    ['plainto_tsquery', 'Converts a plain string into an ANDed PostgreSQL text query'],
+    ['ts_rank_cd', 'BM25-like cover-density ranking function in PostgreSQL'],
+    ['RRF', 'Merge two ranked lists by position, not score; k=60 softens dominance'],
+    ['Hybrid search', 'Run vector + BM25 in parallel, fuse with RRF'],
+    ['Chunking', 'Split long docs into ~400-word segments for embedding'],
+    ['Overlap', '2-sentence carry-over between chunks to preserve cross-boundary context'],
+    ['Query expansion', 'Prepend domain keywords to query before embedding for better recall'],
+    ['Similarity threshold', '0.45 minimum cosine score to include a chunk at all'],
+    ['Word budget', '2,500 max words of retrieved context injected into the prompt'],
+  ]
+)
+
+// ─────────────────────────────────────────────────────────────────────────────
+
 h2('Step 6 — System Prompt Assembly')
 body(
   'buildSystemPrompt(chunks, domain) wraps retrieved chunks in <retrieved_legal_context> XML tags, ' +

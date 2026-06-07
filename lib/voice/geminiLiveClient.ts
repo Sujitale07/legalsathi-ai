@@ -54,8 +54,9 @@ export class GeminiLiveClient {
   private ai: GoogleGenAI;
   private domain: string;
 
-  private pendingAiText = "";
-  private ragInFlight   = false;
+  private pendingAiText   = "";
+  private pendingUserText = "";
+  private ragInFlight     = false;
 
   constructor(domain: string, callbacks: GeminiLiveCallbacks) {
     this.domain    = domain;
@@ -74,6 +75,8 @@ export class GeminiLiveClient {
       model: "gemini-3.1-flash-live-preview",
       config: {
         responseModalities: [Modality.AUDIO],
+        // Transcribe what the user says (arrives as inputTranscription in messages)
+        inputAudioTranscription: {},
         outputAudioTranscription: {},
         systemInstruction: buildVoiceSystemInstruction(this.domain),
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -125,52 +128,10 @@ export class GeminiLiveClient {
     });
   }
 
-  /**
-   * Core pipeline: STT gave us the transcript → fetch RAG → inject context → send to Gemini.
-   *
-   * Because Web Speech API gives us the transcript locally (during speech),
-   * we have it BEFORE calling Gemini — so RAG context is always injected
-   * into the same turn the model uses to generate its response.
-   */
-  async endUserTurn(transcript: string): Promise<void> {
-    if (!this.session || this.ragInFlight) return;
-    this.ragInFlight = true;
-
-    const query = transcript.trim();
-    console.log("[GeminiLive] endUserTurn — query:", query.slice(0, 100));
-    this.callbacks.onStateChange("thinking");
-
-    // Add user transcript to UI immediately
-    this.callbacks.onTranscript({ id: crypto.randomUUID(), role: "user", text: query });
-
-    let prefix = "";
-    if (query.length >= 4 && this.callbacks.fetchRagContext) {
-      try {
-        const context = await this.callbacks.fetchRagContext(query, this.domain);
-        console.log("[GeminiLive] RAG context chars:", context?.length ?? 0);
-        if (context) {
-          const label = (DOMAIN_MAP[this.domain] ?? DOMAIN_MAP["general"]).label;
-          prefix = `<retrieved_legal_context>\n${context}\n</retrieved_legal_context>\n` +
-                   `Use the above context to answer. You may also draw on your general ${label} legal knowledge.\n\n`;
-        }
-      } catch (err) {
-        console.warn("[GeminiLive] RAG fetch failed:", err);
-      }
-    }
-
-    this.ragInFlight = false;
+  /** Stream a raw PCM16 audio chunk directly to Gemini Live. */
+  sendAudioChunk(base64: string, mimeType: string): void {
     if (!this.session) return;
-
-    console.log("[GeminiLive] sending turn — RAG prefix:", prefix.length > 0 ? "yes" : "no");
-    this.session.sendClientContent({
-      turns: [
-        {
-          role: "user",
-          parts: [{ text: prefix + query }],
-        },
-      ],
-      turnComplete: true,
-    });
+    this.session.sendRealtimeInput({ audio: { data: base64, mimeType } });
   }
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -178,20 +139,41 @@ export class GeminiLiveClient {
     const sc = message?.serverContent;
     if (!sc) return;
 
-    const { modelTurn, turnComplete, interrupted, outputTranscription } = sc;
+    const { modelTurn, turnComplete, interrupted, outputTranscription, inputTranscription } = sc;
 
     if (interrupted) {
-      this.pendingAiText = "";
+      this.pendingAiText   = "";
+      this.pendingUserText = "";
       this.callbacks.onInterrupt();
       this.callbacks.onStateChange("listening");
       return;
     }
 
+    // Gemini streams user speech transcription incrementally.
+    if (inputTranscription?.text) {
+      this.pendingUserText += inputTranscription.text;
+    }
+
+    // Gemini Live sends outputTranscription incrementally (one chunk per audio packet).
+    // Accumulate with += so the full sentence is preserved at turnComplete.
     if (outputTranscription?.text) {
-      this.pendingAiText = outputTranscription.text;
+      this.pendingAiText += outputTranscription.text;
     }
 
     if (modelTurn?.parts) {
+      // When the model starts generating, commit the accumulated user transcript
+      // and kick off async RAG context injection for the next response.
+      if (this.pendingUserText) {
+        const userText = this.pendingUserText.trim();
+        this.pendingUserText = "";
+        if (userText) {
+          this.callbacks.onTranscript({ id: crypto.randomUUID(), role: "user", text: userText });
+          this.callbacks.onStateChange("thinking");
+          // Async: fetch RAG and inject as additional context for next turn.
+          void this.injectRagContext(userText);
+        }
+      }
+
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       for (const part of modelTurn.parts as any[]) {
         if (part.inlineData) {
@@ -217,12 +199,42 @@ export class GeminiLiveClient {
     }
   }
 
+  /** Fetch RAG context for the user's query and silently inject it into the session
+   *  so the model can reference it when answering follow-up questions. */
+  private async injectRagContext(query: string): Promise<void> {
+    if (this.ragInFlight || !this.callbacks.fetchRagContext || query.length < 4) return;
+    this.ragInFlight = true;
+    try {
+      const context = await this.callbacks.fetchRagContext(query, this.domain);
+      if (context && this.session) {
+        const label = (DOMAIN_MAP[this.domain] ?? DOMAIN_MAP["general"]).label;
+        // Inject retrieved context as a "tool" turn so the model has it for its reply.
+        this.session.sendClientContent({
+          turns: [{
+            role: "user",
+            parts: [{ text:
+              `<retrieved_legal_context>\n${context}\n</retrieved_legal_context>\n` +
+              `Reference this context when answering about ${label}.`,
+            }],
+          }],
+          turnComplete: false,
+        });
+        console.log("[GeminiLive] RAG context injected, chars:", context.length);
+      }
+    } catch (err) {
+      console.warn("[GeminiLive] RAG inject failed:", err);
+    } finally {
+      this.ragInFlight = false;
+    }
+  }
+
   disconnect(): void {
-    const s   = this.session;
+    const s          = this.session;
     this.session     = null;
     this.ragInFlight = false;
     if (s) { try { s.close(); } catch { /* ignore */ } }
-    this.pendingAiText = "";
+    this.pendingAiText   = "";
+    this.pendingUserText = "";
   }
 
   isConnected(): boolean {

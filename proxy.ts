@@ -12,6 +12,7 @@ const isProtectedRoute = createRouteMatcher([
   '/api/export(.*)',
   '/api/documents(.*)',
   '/api/admin(.*)',
+  '/api/voice-rag(.*)',
 ])
 
 const isAuthRoute = createRouteMatcher(['/sign-in(.*)', '/sign-up(.*)'])

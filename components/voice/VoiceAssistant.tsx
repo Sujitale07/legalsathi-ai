@@ -23,7 +23,7 @@ function VoiceOrb({ state, compact }: { state: VoiceState; compact?: boolean }) 
   if (state === "connecting" || state === "thinking") {
     return (
       <div className={`${outer} flex items-center justify-center`}>
-        <div className={`${mid} rounded-full border-4 border-[var(--color-app-accent)] border-t-transparent animate-spin`} />
+        <div className={`${mid} rounded-full border-4 border-app-accent border-t-transparent animate-spin`} />
       </div>
     );
   }
@@ -50,7 +50,7 @@ function VoiceOrb({ state, compact }: { state: VoiceState; compact?: boolean }) 
   }
   return (
     <div className={`${outer} flex items-center justify-center`}>
-      <span className={`${mid} rounded-full bg-[var(--color-app-border)] block`} />
+      <span className={`${mid} rounded-full bg-app-border block`} />
     </div>
   );
 }
@@ -77,11 +77,17 @@ export function VoiceAssistant({
   const [transcript, setTranscript] = useState<TranscriptEntry[]>([]);
   const [error, setError]       = useState<string | null>(null);
 
-  const clientRef   = useRef<GeminiLiveClient | null>(null);
-  const captureRef  = useRef<AudioCapture | null>(null);
-  const playbackRef = useRef<AudioPlayback | null>(null);
-  const cleaningRef = useRef(false);
-  const didStart    = useRef(false);
+  const clientRef        = useRef<GeminiLiveClient | null>(null);
+  const captureRef       = useRef<AudioCapture | null>(null);
+  const playbackRef      = useRef<AudioPlayback | null>(null);
+  const cleaningRef      = useRef(false);
+  const didStart         = useRef(false);
+  const userStoppedRef   = useRef(false);   // true when the user explicitly clicked Stop
+  const autoReconnectRef = useRef(0);       // counts server-initiated disconnects; resets on user stop
+  // Stable ref so the onStateChange closure always calls the latest handleStart
+  // without capturing it as a dep (which would rebuild the client on every render).
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const handleStartRef   = useRef<(preserveTranscript?: boolean) => Promise<void>>(null as any);
 
   const domainConfig = DOMAIN_MAP[domain] ?? DOMAIN_MAP["general"];
 
@@ -100,9 +106,10 @@ export function VoiceAssistant({
   // Disconnect when parent unmounts the component (voiceOpen = false)
   useEffect(() => () => { cleanup(); }, [cleanup]);
 
-  const handleStart = useCallback(async () => {
+  const handleStart = useCallback(async (preserveTranscript = false) => {
+    userStoppedRef.current = false;    // user is starting — allow auto-reconnect again
     setError(null);
-    setTranscript([]);
+    if (!preserveTranscript) setTranscript([]);
 
     const playback = new AudioPlayback();
     playbackRef.current = playback;
@@ -129,11 +136,25 @@ export function VoiceAssistant({
           // Without this, a stale session's onclose fires after the new session
           // has already written its own instances into the refs, killing the new session.
           if (clientRef.current === client) {
+            const micWasRunning = captureRef.current !== null;
             captureRef.current?.stop();
             captureRef.current  = null;
             playbackRef.current?.stop();
             playbackRef.current = null;
             clientRef.current   = null;
+
+            // Auto-reconnect when Gemini drops the session (code 1000 inactivity timeout)
+            // and the user hasn't clicked Stop. Limit to 3 attempts to avoid infinite loops.
+            if (micWasRunning && !userStoppedRef.current && !cleaningRef.current
+                && autoReconnectRef.current < 3) {
+              autoReconnectRef.current += 1;
+              console.log(`[VoiceAssistant] Gemini dropped session, auto-reconnect #${autoReconnectRef.current}`);
+              setTimeout(() => {
+                if (!cleaningRef.current && !userStoppedRef.current) {
+                  void handleStartRef.current(true); // preserve transcript on reconnect
+                }
+              }, 1500);
+            }
           }
         }
       },
@@ -168,9 +189,9 @@ export function VoiceAssistant({
 
     try {
       const capture = new AudioCapture(
-        (text) => void client.endUserTurn(text), // Web Speech API final transcript → RAG → Gemini
-        ()     => { playback.clearQueue(); setState("listening"); }, // barge-in: cut model audio
-        ()     => {},                            // speech end (no-op — transcript fires instead)
+        (b64, mime) => client.sendAudioChunk(b64, mime), // stream PCM16 directly to Gemini Live
+        ()          => { playback.clearQueue(); },        // barge-in: cut model audio
+        ()          => {},                               // speech end (Gemini handles VAD)
       );
       captureRef.current = capture;
       await capture.start();
@@ -183,11 +204,16 @@ export function VoiceAssistant({
     }
   }, [domain, cleanup]);
 
+  // Keep the ref in sync so the onStateChange closure always has the latest version.
+  useEffect(() => { handleStartRef.current = handleStart; }, [handleStart]);
+
   // Auto-start on mount. Reset didStart on cleanup so React StrictMode's
   // fake unmount+remount cycle re-triggers handleStart on the live instance.
   useEffect(() => {
     if (autoStart && !didStart.current) {
       didStart.current = true;
+      userStoppedRef.current   = false;
+      autoReconnectRef.current = 0;
       handleStart();
     }
     return () => {
@@ -196,6 +222,8 @@ export function VoiceAssistant({
   }, [autoStart, handleStart]);
 
   const handleEnd = useCallback(() => {
+    userStoppedRef.current   = true;   // prevent auto-reconnect
+    autoReconnectRef.current = 0;
     cleanup();
     setState("idle");
     onClose?.();
@@ -204,29 +232,41 @@ export function VoiceAssistant({
   // ── Compact mode — inline inside the chat input area ─────────────────────
   if (compact) {
     const recent = transcript.slice(-4);
+    const disconnected = state === "disconnected" || state === "idle";
     return (
       <div className="flex flex-col gap-3 w-full">
 
-        {/* Orb + status + Stop */}
+        {/* Orb + status + Stop / Reconnect */}
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-3">
             <VoiceOrb state={state} compact />
             <div>
-              <p className="text-[11px] font-semibold text-[#1E2E4F]">
+              <p className="text-[11px] font-semibold text-app-accent">
                 {domainConfig.icon} {domainConfig.label}
               </p>
               <SessionStatus state={state} />
             </div>
           </div>
 
-          <button
-            type="button"
-            onClick={handleEnd}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-sm text-[12px] font-medium bg-red-500 text-white hover:bg-red-600 transition-colors"
-          >
-            <StopCircleIcon className="w-3.5 h-3.5" />
-            Stop
-          </button>
+          <div className="flex items-center gap-2">
+            {disconnected && (
+              <button
+                type="button"
+                onClick={() => { setError(null); handleStart(); }}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-sm text-[12px] font-medium bg-app-accent text-white hover:opacity-90 transition-opacity"
+              >
+                🎙 Reconnect
+              </button>
+            )}
+            <button
+              type="button"
+              onClick={handleEnd}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-sm text-[12px] font-medium bg-red-500 text-white hover:bg-red-600 transition-colors"
+            >
+              <StopCircleIcon className="w-3.5 h-3.5" />
+              {disconnected ? "Close" : "Stop"}
+            </button>
+          </div>
         </div>
 
         {error && (
@@ -242,7 +282,7 @@ export function VoiceAssistant({
               <p
                 key={e.id}
                 className={`text-[12px] leading-snug ${
-                  e.role === "user" ? "text-right text-app-text" : "text-left text-[#1E2E4F]"
+                  e.role === "user" ? "text-right text-app-text" : "text-left text-app-accent"
                 }`}
               >
                 <span className="opacity-40 text-[10px] mr-1">
@@ -266,7 +306,7 @@ export function VoiceAssistant({
 
       {/* Domain badge + close */}
       <div className="flex items-center justify-between w-full">
-        <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[11px] font-semibold bg-[#E8ECF4] text-[#1E2E4F] border border-[#C8D4E8]">
+        <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[11px] font-semibold bg-app-accent-light text-app-accent border border-[#C8D4E8]">
           {domainConfig.icon} {domainConfig.label} · locked
         </span>
         {onClose && (
@@ -300,9 +340,9 @@ export function VoiceAssistant({
       ) : (
         <button
           type="button"
-          onClick={handleStart}
+          onClick={() => void handleStart()}
           disabled={busy}
-          className="flex items-center gap-2 px-6 py-2.5 rounded-lg text-sm font-medium bg-[var(--color-app-accent)] text-white disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+          className="flex items-center gap-2 px-6 py-2.5 rounded-lg text-sm font-medium bg-app-accent text-white disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
         >
           {busy
             ? <span className="w-4 h-4 rounded-full border-2 border-white border-t-transparent animate-spin" />
