@@ -154,10 +154,6 @@ Disclaimer: Sourced via RAG tracking from official Nepalese Transport Guidelines
 
   "I can't find a verified answer for this in the taxation knowledge base."
 
-  Conclude every response with:
-
-  [RECOMMEND: TAX_EXPERT_CA]
-
   Disclaimer: Sourced via programmatic matching from Nepalese Tax Legislation and retrieved legal sources. Consult a certified CA or tax professional for formal filing.
 
   </system_instructions>`,

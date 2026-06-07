@@ -190,7 +190,14 @@ export function VoiceAssistant({
     try {
       const capture = new AudioCapture(
         (b64, mime) => client.sendAudioChunk(b64, mime), // stream PCM16 directly to Gemini Live
-        ()          => { playback.clearQueue(); },        // barge-in: cut model audio
+        // Don't cut the AI off on our own naive amplitude-threshold VAD — it
+        // fires on echo, background noise, or breathing and was chopping
+        // answers off mid-sentence. Gemini Live's own server-side turn
+        // detection sends `interrupted` (wired to onInterrupt below) only
+        // when the user genuinely starts a new question — that's the sole
+        // signal that should stop playback, so the AI always finishes its
+        // current answer first.
+        ()          => {},                               // local speech start — no barge-in
         ()          => {},                               // speech end (Gemini handles VAD)
       );
       captureRef.current = capture;
