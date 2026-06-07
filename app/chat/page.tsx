@@ -171,6 +171,17 @@ const DocsSkeleton = () => (
   </div>
 )
 
+// ─── Helpers ─────────────────────────────────────────────────────────────────
+
+function formatDocTitle(raw: string): string {
+  return raw
+    .replace(/\.[^/.]+$/, '')   // strip file extension
+    .replace(/^\d+[-_]?/, '')   // strip leading numeric prefix (e.g. "8")
+    .replace(/[-_]/g, ' ')      // hyphens / underscores → spaces
+    .replace(/\s+/g, ' ')       // collapse extra whitespace
+    .trim()
+}
+
 // ─── Export helpers ───────────────────────────────────────────────────────────
 
 function triggerDownload(content: string, filename: string, mime: string) {
@@ -904,7 +915,7 @@ export default function ChatPage() {
                                 style={{ backgroundColor: '#E8ECF4', color: '#1E2E4F', border: '1px solid #C8D4E8' }}
                               >
                                 <IconDoc />
-                                {s.documentTitle}
+                                {formatDocTitle(s.documentTitle)}
                                 {s.pages && s.pages.length > 0 && (
                                   <span
                                     className="ml-1 px-1.5 py-0.5 rounded text-[9.5px] font-bold"
